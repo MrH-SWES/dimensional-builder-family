@@ -11,7 +11,15 @@ Should Fix Soon:
 - No ARIA roles, keyboard navigation, or screen-reader labels. Accessibility is entirely absent.
 
 Notes:
-- Files changed: apps/array-builder-v2/index.html (full rewrite from real sources), harness/reviews/LATEST_REVIEW.md (new)
+- Files changed: apps/array-builder-v2/index.html (flat-layer handoff + mobile header), harness/reviews/LATEST_REVIEW.md (updated)
+
+- What changed in this revision:
+  - Flat-layer handoff redesigned: `finish()` no longer replaces all `.row-fused` elements with a single undifferentiated rectangle. Instead each row is kept in the DOM, stripped of its handle/tag/label, and given the `.flat-done` class. A transparent `.flat-glow` overlay is appended on top, framing the whole layer with a 2px blue border + soft blue drop-shadow without filling the interior. The 4px natural gaps between rows (GRID minus block-size) remain visible as row seams. After a 10-by-8 build the final state reads as eight distinct blue sticks sharing one unified surface, not a blue rectangle.
+  - `.row-fused::after` vertical column lines are still present in the settled state via inheritance — column structure inside each stick is also preserved.
+  - Row settle animation (rowSettle): each row fades from opacity 0.5 and scaleY 0.93 to full size, staggered by 28 ms per row so rows appear to "lock" one at a time from top to bottom.
+  - Flat glow animation (flatResolve): the unified frame scales from 0.97→1 and opacity 0→1 at 0.6 s spring timing.
+  - Mobile header: `@media (max-height: 600px), (max-width: 430px)` reduces header from 80 px to 54 px and footer padding to 10 px. JS `updateGridSize()` reads the same breakpoint and reduces the availH subtraction accordingly. `init()` adjusts the target-zone centering offset (headerHalf: 27 px on mobile vs 40 px desktop).
+  - Removed: `.flat-layer` CSS class (replaced by `.flat-done` + `.flat-glow`).
 
 - What was reused from Number Line:
   - Exact CSS custom properties: --bg (#F5F5F7), --glass, --surface, --text-main, --text-gray, --text-light, --accent, --border
@@ -42,9 +50,9 @@ Notes:
 - How the row-to-flat interaction works:
   1. User drags the chrome bead handle rightward; red unit blocks (--ones) materialise one per grid cell. Numbers 1…N label each position.
   2. On release (≥ 2 cols): animateStaggeredMerge() plays — numerals converge and fade, single count survives, then the block row swaps to a single blue .row-fused bar with a vertical bead handle below it.
-  3. User drags the vertical bead downward; additional .row-fused bars stack beneath with 1-px gaps. Right-edge .skip-tag shows cumulative totals. updateMath() shows repeated-addition sum (e.g. 4 + 4 + 4).
-  4. On release (≥ 2 rows): finish() is called. After 320 ms pause, all .row-fused elements are replaced by a single .flat-layer div — same total width × height, --tens blue, carrying a visible 2D grid pattern (repeating-linear-gradient in both axes) showing columns and rows within the unified surface. Animation: flatResolve (scale 0.96→1, opacity 0→1, spring easing, 500 ms).
-  5. 420 ms after the flat layer appears, the multiplication record renders: `rows × cols = total` in large (grid-relative) Lexend 900 weight, using --text-light .operator tokens between the numerals. Animation: pop (scale 0.5→1, spring). The equation is always last — it appears only after the layer exists.
+  3. User drags the vertical bead downward; additional .row-fused bars stack beneath with 4-px gaps. Right-edge .skip-tag shows cumulative totals. updateMath() shows repeated-addition sum (e.g. 4 + 4 + 4).
+  4. On release (≥ 2 rows): finish() is called. After a 320 ms pause each .row-fused bar has its handle, skip-tag, and label removed and gains .flat-done (softer shadow, rowSettle animation staggered 28 ms per row). A transparent .flat-glow div (same width × height as the full stack, background: transparent) is appended and animates in with flatResolve, giving a blue-tinted outer border and glow without hiding the row seams.
+  5. 420 ms after the settle begins, the multiplication record renders: `rows × cols = total` in large (grid-relative) Lexend 900 weight, using --text-light .operator tokens between the numerals. Animation: pop (scale 0.5→1, spring). The equation is always last — it appears only after the layer exists.
   6. Reset button (top-right) is visible throughout steps 3–5 and returns to step 1 cleanly.
 
 - What is placeholder:
@@ -57,6 +65,6 @@ Notes:
 - Risks/tradeoffs:
   - Removing the level / tutorial system (intentional per spec) means first-time users have no guided discovery. The bead handle affords drag but there is no caption pointing at it.
   - Sandbox-only mode removes the motivating "target shape". Appropriate for a freeplay manipulative but may feel open-ended without a surrounding task context.
-  - The flat-layer resolve clears the individual row-fused elements from the DOM. If a teacher wants students to count individual rows after completion, the rows are gone (only the flat layer remains).
+  - Individual row elements remain in the DOM after finish(); this is intentional (the row structure must stay readable) and enables teachers or a future layer to count or re-inspect rows.
   - Grid sizing recalculates on resize and calls init(), which resets any in-progress build. Consistent with Array Builder v1 behaviour but loses work on viewport change.
   - --bg: #F5F5F7 (Number Line) is lighter than Array Builder's #E5E5EA; dot-grid opacity was reduced to 10% accordingly so the dots don't overpower the lighter surface.
