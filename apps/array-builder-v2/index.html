@@ -387,11 +387,11 @@
 
         handleX.addEventListener('pointerdown', e => {
             targetZone.classList.add('landing-strip');
-            const startX    = e.clientX ?? e.touches?.[0]?.clientX;
+            const startX    = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
             const startCols = currentCols;
 
             const move = e => {
-                const dx      = (e.clientX ?? e.touches?.[0]?.clientX) - startX;
+                const dx      = (e.clientX ?? e.touches?.[0]?.clientX ?? startX) - startX;
                 const newCols = Math.max(1, Math.min(MAX_COLS, startCols + Math.round(dx / GRID)));
                 if (newCols !== currentCols) { currentCols = newCols; renderHorizontal(); }
             };
@@ -481,11 +481,11 @@
         handleY.addEventListener('pointerdown', e => {
             isDraggingY = true;
             targetZone.classList.add('landing-strip');
-            const startY    = e.clientY ?? e.touches?.[0]?.clientY;
+            const startY    = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
             const startRows = currentRows;
 
             const move = e => {
-                const dy      = (e.clientY ?? e.touches?.[0]?.clientY) - startY;
+                const dy      = (e.clientY ?? e.touches?.[0]?.clientY ?? startY) - startY;
                 const newRows = Math.max(1, Math.min(MAX_ROWS, startRows + Math.round(dy / GRID)));
                 if (newRows !== currentRows) { currentRows = newRows; renderVertical(); }
             };
