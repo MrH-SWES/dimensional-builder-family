@@ -11,32 +11,46 @@ Should Fix Soon:
 - No ARIA roles, keyboard navigation, or screen-reader labels in either app. Accessibility is entirely absent.
 
 Notes:
-- Files changed: apps/number-line/index.html (mobile scroll fix), harness/reviews/LATEST_REVIEW.md (updated)
+- Files changed: apps/number-line/index.html (mobile landscape scroll + portrait pan area fix), harness/reviews/LATEST_REVIEW.md (updated)
 
-- Cause of mobile scrolling bug:
-  - `.tray-scroller` had `overflow-x: auto` but no explicit `touch-action` property.
-  - Without `touch-action: pan-x`, mobile browsers (especially iOS Safari) do not know to treat horizontal swipes as scroll gestures on that element.
-  - Additionally, the `draggable="true"` HTML attribute on `.cube` and `.ten-bar` implicitly sets `touch-action: none` on those elements, which blocked pan gestures from propagating up to the scroller even when the user started a swipe on a block.
+- Root cause of landscape vertical scroll lock:
+  - `body` had `height: 100dvh; overflow: hidden` which hard-locked the viewport to exactly one screen height.
+  - In landscape, the header (80 px) + workspace content + footer exceeded the available short viewport height, but the overflow was hidden rather than scrollable.
+  - The user had no way to scroll the page to reach the number line.
 
-- How scrolling/panning was fixed:
-  - Added `touch-action: pan-x` to `.tray-scroller` — the primary scroll container.
-  - Added `-webkit-overflow-scrolling: touch` to `.tray-scroller` for legacy iOS Safari momentum scrolling.
-  - Added `touch-action: pan-x` to `.tray-wrapper`, `.tray`, `.number-line-top`, `.number-line-bottom`, and `.slot` so that any touch originating on the track background pans the scroller.
-  - Added `touch-action: pan-x manipulation` to `.cube` and `.ten-bar` so that a horizontal swipe starting on a block still pans the scroller (pan-x), while a tap still fires a fast click event (manipulation).
-  - Increased `.tray-wrapper` end-padding from 60px to 80px so the last numbered mark scrolls fully into view on mobile.
+- Root cause of limited portrait pan area:
+  - `touch-action: pan-x` was set only on `.tray-scroller` and its children (`.tray-wrapper`, `.tray`, `.number-line-top`, `.number-line-bottom`, `.slot`).
+  - Touches starting on the `.workspace` background (above or around the scroller) were not intercepted; the browser fell back to default (no horizontal pan, no vertical page scroll either because overflow was hidden on body).
+  - Pan only worked when the initial touch landed directly on the track strip.
+
+- How fixed:
+  - CSS: Changed `body` from `height: 100dvh; overflow: hidden` to `min-height: 100dvh; overflow-y: auto; touch-action: pan-y`.
+    - `min-height` lets the body grow beyond the viewport in landscape so the page becomes vertically scrollable.
+    - `overflow-y: auto` enables native vertical page scroll when content exceeds viewport height.
+    - `touch-action: pan-y` explicitly declares that vertical page scrolling is allowed (overrides any implicit restriction).
+    - Desktop is unaffected: content fits within the viewport height, so body stays at exactly 100dvh and the workspace still vertically centers its children via `flex: 1; justify-content: center`.
+  - CSS: Added `padding-bottom: max(24px, env(safe-area-inset-bottom))` to `footer` so the track is not obscured by the iOS home indicator / browser chrome in landscape.
+  - JS: Added axis-locked workspace touch-pan handler (`touchstart`/`touchmove`/`touchend` on `.workspace`).
+    - On `touchstart` (excluding `.cube`, `.ten-bar`, `.action-tray`, `input` targets): records start position and `scroller.scrollLeft`.
+    - On `touchmove`: determines dominant axis after 5 px of movement.
+      - Horizontal axis locked → calls `e.preventDefault()` and sets `scroller.scrollLeft` directly (pans the number line).
+      - Vertical axis locked → does nothing; native page vertical scroll proceeds.
+    - Registered with `{ passive: false }` on `touchmove` so `preventDefault()` is legal.
+    - This extends horizontal panning to the full workspace area, not just the exact track strip.
 
 - What was preserved:
   - Red ones (#DC143C), blue tens (#4169E1), inventory tray, large running total display.
-  - Auto-bundle (10 ones -> ten-bar) and break-apart (click ten-bar) interactions.
+  - Auto-bundle (10 ones → ten-bar) and break-apart (click ten-bar) interactions.
   - Mouse-based click-drag pan (unchanged; still works on desktop).
   - Zoom slider (0.3-1.2x) and all dynamic scaling.
   - Full brand design language: glass header, Math Things logo, Lexend font, footer bead.
-  - Desktop layout remains polished and centered.
+  - Desktop layout remains polished and centered (min-height + flex: 1 preserve centering).
   - No algorithm/procedure tabs reintroduced.
 
 - Remaining mobile limitations:
   - HTML Drag-and-Drop API (dragstart/drop) does not fire on touch; dragging a piece from the bank tray to the track via touch does not work. Clicking the dispenser buttons to add pieces works on mobile. Implementing native touch-drag-to-drop is a future enhancement.
-  - Touching a block and swiping will pan horizontally (intended), but the block click (break-apart/bundle) will not fire if the touch moves significantly -- this is the correct native browser behaviour for distinguishing tap vs. scroll.
+  - Touching a block and swiping will pan horizontally (intended), but the block click (break-apart/bundle) will not fire if the touch moves significantly — this is correct native browser behaviour for distinguishing tap vs. scroll.
+  - On some Android browsers, `env(safe-area-inset-bottom)` may not be respected unless the page declares `viewport-fit=cover` in the meta viewport tag (not added here to avoid other layout side effects).
 
 - What moved into Addition/Subtraction Machine (apps/addition-subtraction-machine/index.html):
   - The complete prior two-tab app was copied verbatim (title updated to "Addition/Subtraction Machine | Math Things.")

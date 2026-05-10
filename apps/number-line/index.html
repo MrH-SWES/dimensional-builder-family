@@ -48,10 +48,12 @@
             font-family: 'Lexend', sans-serif;
             background: var(--bg);
             color: var(--text-main);
-            height: 100dvh;
+            min-height: 100dvh;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            /* Allow vertical scroll so mobile landscape can reach the number line */
+            overflow-y: auto;
+            touch-action: pan-y;
             user-select: none;
             -webkit-user-select: none;
             -webkit-font-smoothing: antialiased;
@@ -252,7 +254,7 @@
         }
 
         /* ── FOOTER ── */
-        footer { text-align: center; padding: 24px; font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-light); background: var(--bg); }
+        footer { text-align: center; padding: 24px; padding-bottom: max(24px, env(safe-area-inset-bottom)); font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-light); background: var(--bg); }
         .footer-bead { display: inline-block; width: 0.22em; height: 0.22em; border-radius: 50%; margin-bottom: 0.08em; background: linear-gradient(135deg, #d8d8d8, #a0a0a0, #d0d0d0); box-shadow: 0 1px 3px rgba(0,0,0,0.2); vertical-align: baseline; }
 
         /* ── ANIMATIONS ── */
@@ -350,6 +352,48 @@
             const x = e.pageX - scroller.offsetLeft;
             const walk = (x - startX) * 1.5;
             scroller.scrollLeft = scrollLeft - walk;
+        });
+
+        // --- WORKSPACE TOUCH PAN (axis-locked) ---
+        // Horizontal drags anywhere on the workspace pan the number-line scroller.
+        // Vertical drags fall through to natural page scroll (needed for landscape).
+        const workspace = document.querySelector('.workspace');
+        let wsTouchStartX = null;
+        let wsTouchStartY = null;
+        let wsScrollLeft = null;
+        let wsAxisLocked = null; // 'x' | 'y' | null
+
+        workspace.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.cube, .ten-bar, .action-tray, input')) return;
+            wsTouchStartX = e.touches[0].clientX;
+            wsTouchStartY = e.touches[0].clientY;
+            wsScrollLeft = scroller.scrollLeft;
+            wsAxisLocked = null;
+        }, { passive: true });
+
+        workspace.addEventListener('touchmove', (e) => {
+            if (wsTouchStartX === null) return;
+            const dx = e.touches[0].clientX - wsTouchStartX;
+            const dy = e.touches[0].clientY - wsTouchStartY;
+            if (wsAxisLocked === null) {
+                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5) {
+                    wsAxisLocked = 'x';
+                } else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 5) {
+                    wsAxisLocked = 'y';
+                }
+            }
+            if (wsAxisLocked === 'x') {
+                e.preventDefault();
+                scroller.scrollLeft = wsScrollLeft - dx;
+            }
+            // wsAxisLocked === 'y': let default page vertical scroll happen
+        }, { passive: false });
+
+        workspace.addEventListener('touchend', () => {
+            wsTouchStartX = null;
+            wsTouchStartY = null;
+            wsScrollLeft = null;
+            wsAxisLocked = null;
         });
 
         function updateRunningTotal() {
