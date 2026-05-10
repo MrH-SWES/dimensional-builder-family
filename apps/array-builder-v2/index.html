@@ -207,32 +207,36 @@
         }
         .skip-tag.lit { color: var(--tens); font-weight: 800; }
 
-        /* ── FLAT LAYER — new for v2: rows resolve into one unified surface ── */
-        .flat-layer {
+        /* ── FLAT STATE — rows settle; row-stick structure is preserved ── */
+
+        /* Each row settles in place — 3-D bar look retained, drop-shadow softened */
+        .row-fused.flat-done {
+            box-shadow:
+                inset 2px 2px 0 rgba(255,255,255,0.4),
+                inset -2px -2px 0 rgba(0,0,0,0.12),
+                0 1px 5px rgba(0,0,0,0.07);
+            animation: rowSettle 0.45s var(--spring) both;
+        }
+        @keyframes rowSettle {
+            0%   { opacity: 0.5; transform: scaleY(0.93); }
+            100% { opacity: 1;   transform: scaleY(1); }
+        }
+
+        /* Unified glow frame — wraps all rows without merging them */
+        .flat-glow {
             position: absolute;
-            background: var(--tens);
-            border-radius: 6px;
-            box-shadow: var(--shadow-block);
-            /* Show both axes as a grid pattern */
-            background-image:
-                repeating-linear-gradient(
-                    90deg,
-                    transparent,
-                    transparent calc(var(--grid-size) - 2px),
-                    rgba(0,0,0,0.12) calc(var(--grid-size) - 1px),
-                    rgba(0,0,0,0.12) var(--grid-size)
-                ),
-                repeating-linear-gradient(
-                    0deg,
-                    transparent,
-                    transparent calc(var(--grid-size) - 2px),
-                    rgba(0,0,0,0.08) calc(var(--grid-size) - 1px),
-                    rgba(0,0,0,0.08) var(--grid-size)
-                );
-            animation: flatResolve 0.5s var(--spring) both;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 50;
+            background: transparent;
+            box-shadow:
+                0 0 0 2px rgba(65,105,225,0.38),
+                0 10px 36px rgba(65,105,225,0.22),
+                inset 0 0 0 1px rgba(255,255,255,0.06);
+            animation: flatResolve 0.6s var(--spring) both;
         }
         @keyframes flatResolve {
-            0%   { opacity: 0; transform: scale(0.96); }
+            0%   { opacity: 0; transform: scale(0.97); }
             100% { opacity: 1; transform: scale(1); }
         }
 
@@ -296,6 +300,14 @@
         @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
+        /* ── MOBILE — reduce header dominance on short/narrow screens ── */
+        @media (max-height: 600px), (max-width: 430px) {
+            header { height: 54px; padding: 0 16px; }
+            .logo { font-size: 1.2rem; width: auto; }
+            .header-title { font-size: 0.78rem; }
+            footer { padding: 10px 20px; }
+        }
+
         @keyframes pulseNext {
             0%   { box-shadow: inset 2.5px 2.5px 5px rgba(255,255,255,0.8), inset -2.5px -2.5px 5px rgba(0,0,0,0.2), 0 8px 20px rgba(0,0,0,0.2), 0 0 0 0   rgba(65,105,225,0.4); }
             70%  { box-shadow: inset 2.5px 2.5px 5px rgba(255,255,255,0.8), inset -2.5px -2.5px 5px rgba(0,0,0,0.2), 0 8px 20px rgba(0,0,0,0.2), 0 0 0 15px rgba(65,105,225,0); }
@@ -347,8 +359,10 @@
 
     // ── GRID SIZING ───────────────────────────────────────────────────────────
     function updateGridSize() {
-        const availW = window.innerWidth  - 64;
-        const availH = window.innerHeight - 200;  // header 80 + footer ~60 + breathing room
+        const isMobile   = window.innerHeight < 600 || window.innerWidth < 430;
+        const headerH    = isMobile ? 54 : 80;
+        const availW     = window.innerWidth  - 64;
+        const availH     = window.innerHeight - headerH - 100; // header + footer + breathing
         GRID = Math.max(24, Math.min(60, Math.min(availW / MAX_COLS, availH / MAX_ROWS)));
         document.documentElement.style.setProperty('--grid-size',  `${GRID}px`);
         document.documentElement.style.setProperty('--block-size', `${GRID - 4}px`);
@@ -361,12 +375,16 @@
         container.innerHTML = '';
         dynamicMath.innerHTML = '';
 
+        // Center the build bed in the workspace below the header
+        const isMobile    = window.innerHeight < 600 || window.innerWidth < 430;
+        const headerHalf  = isMobile ? 27 : 40;   // headerH / 2
+
         // Sandbox target zone — full 12×12 grid, centred in workspace
         targetZone.classList.remove('landing-strip');
         targetZone.style.width  = `${MAX_COLS * GRID}px`;
         targetZone.style.height = `${MAX_ROWS * GRID}px`;
         targetZone.style.left   = `calc(50vw - ${(MAX_COLS * GRID) / 2}px)`;
-        targetZone.style.top    = `calc(50vh - 40px - ${(MAX_ROWS * GRID) / 2}px)`;
+        targetZone.style.top    = `calc(50vh - ${headerHalf}px - ${(MAX_ROWS * GRID) / 2}px)`;
 
         container.style.left = targetZone.style.left;
         container.style.top  = targetZone.style.top;
@@ -554,27 +572,34 @@
         renderHorizontal();
     }
 
-    // ── FINISH — rows resolve into flat layer, then equation appears ──────────
+    // ── FINISH — rows settle into flat layer; row structure stays visible ─────
     function finish() {
         state = 'done';
         if (handleY) handleY.remove();
         document.querySelectorAll('.skip-tag').forEach(t => t.classList.add('lit'));
 
-        // Capture geometry before clearing
-        const layerW = currentCols * GRID - 4;
-        const layerH = currentRows * GRID - 4;
-
-        // Brief pause so the final row-stack is visible, then resolve
+        // Brief pause so the final row-stack is visible, then settle
         setTimeout(() => {
-            container.innerHTML = '';
+            // Keep each row-fused in place — strip handles, tags, labels
+            const rows = document.querySelectorAll('.row-fused');
+            rows.forEach((row, i) => {
+                row.querySelectorAll('.bead-handle, .skip-tag, .fused-label').forEach(el => el.remove());
+                row.classList.add('flat-done');
+                row.style.animationDelay = (i * 28) + 'ms';
+            });
 
-            const flat = document.createElement('div');
-            flat.className    = 'flat-layer';
-            flat.style.width  = layerW + 'px';
-            flat.style.height = layerH + 'px';
-            container.appendChild(flat);
+            // Unified glow frame — wraps all rows without erasing them
+            // Height = top of row 0 to bottom of last row = (rows-1)*GRID + blockSize
+            const glowH = (currentRows - 1) * GRID + (GRID - 4);
+            const glow = document.createElement('div');
+            glow.className  = 'flat-glow';
+            glow.style.left   = '0';
+            glow.style.top    = '0';
+            glow.style.width  = (currentCols * GRID - 4) + 'px';
+            glow.style.height = glowH + 'px';
+            container.appendChild(glow);
 
-            // Structural record appears only after the flat layer exists
+            // Structural record — appears only after the layer has settled
             setTimeout(() => {
                 dynamicMath.innerHTML =
                     `<div class="final-eq">${currentRows} <span class="operator">×</span> ${currentCols} <span class="operator">=</span> ${currentRows * currentCols}</div>`;
