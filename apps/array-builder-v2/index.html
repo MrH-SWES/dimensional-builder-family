@@ -359,8 +359,8 @@
 
     // ── GRID SIZING ───────────────────────────────────────────────────────────
     function updateGridSize() {
-        const isMobileH  = window.innerHeight < 600 || window.innerWidth < 430;
-        const headerH    = isMobileH ? 54 : 80;
+        const isMobile   = window.innerHeight < 600 || window.innerWidth < 430;
+        const headerH    = isMobile ? 54 : 80;
         const availW     = window.innerWidth  - 64;
         const availH     = window.innerHeight - headerH - 100; // header + footer + breathing
         GRID = Math.max(24, Math.min(60, Math.min(availW / MAX_COLS, availH / MAX_ROWS)));
@@ -376,8 +376,8 @@
         dynamicMath.innerHTML = '';
 
         // Center the build bed in the workspace below the header
-        const isMobileH   = window.innerHeight < 600 || window.innerWidth < 430;
-        const headerHalf  = isMobileH ? 27 : 40;   // headerH / 2
+        const isMobile    = window.innerHeight < 600 || window.innerWidth < 430;
+        const headerHalf  = isMobile ? 27 : 40;   // headerH / 2
 
         // Sandbox target zone — full 12×12 grid, centred in workspace
         targetZone.classList.remove('landing-strip');
@@ -589,13 +589,14 @@
             });
 
             // Unified glow frame — wraps all rows without erasing them
-            // spans top of row 0 to bottom of last row (row seams show through)
+            // Height = top of row 0 to bottom of last row = (rows-1)*GRID + blockSize
+            const glowH = (currentRows - 1) * GRID + (GRID - 4);
             const glow = document.createElement('div');
             glow.className  = 'flat-glow';
             glow.style.left   = '0';
             glow.style.top    = '0';
             glow.style.width  = (currentCols * GRID - 4) + 'px';
-            glow.style.height = ((currentRows - 1) * GRID + (GRID - 4)) + 'px';
+            glow.style.height = glowH + 'px';
             container.appendChild(glow);
 
             // Structural record — appears only after the layer has settled
