@@ -8,46 +8,47 @@ Must Fix:
 Should Fix Soon:
 - No reset button; users must drag the bead all the way back to 0 to clear. A reset affordance (button or double-tap bead) would improve UX.
 - The zoom slider has no label or tooltip; its purpose is not obvious to new users.
-- No ARIA roles, keyboard navigation, or screen-reader labels on the track or bead (bead has aria-label only).
+- No ARIA roles or keyboard navigation on the track itself (bead has `aria-label`; input has `aria-label`; label has `title`).
 - Ten-bar `::before` and cube `::after` pseudo-elements use `display: flex` on absolutely-positioned children — works in all modern browsers but consider wrapping in a `<span>` if compat becomes an issue.
 
 Notes:
-- Files changed: apps/number-line/index.html (full rebuild as Line Builder foundation), harness/reviews/LATEST_REVIEW.md (updated)
+- Files changed: apps/number-line/index.html (control refinements), harness/reviews/LATEST_REVIEW.md (updated)
 
-- What was removed:
-  - Supply tray (action-tray, dispensers, preview-cube, preview-ten, bank-item) — gone from HTML and CSS.
-  - State variables `totalTens` / `totalOnes` replaced by single `quantity` integer.
-  - All bank/dispenser click handlers and HTML5 drag-and-drop (dragstart / dragover / drop) listeners.
-  - Tap-to-fuse (10 ones → ten-bar) and tap-to-break (ten-bar → 10 ones) click interactions.
-  - `dashboard` div and its associated styles.
-  - Body vertical scroll (`min-height: 100dvh; overflow-y: auto`) replaced by `height: 100dvh; overflow: hidden` — track is now flex:1 and fills viewport instead.
+- Toggle label change:
+  - Removed the visible `<span class="pv-toggle-label">Place Value</span>` from the HTML.
+  - Removed the `.pv-toggle-label` CSS rule and the `gap: 8px` from `.pv-toggle-wrap` (now unnecessary).
+  - The pill toggle itself remains in the header at the same position.
+  - Accessibility preserved via `title="Toggle Place Value grouping"` on the `<label>` and `aria-label="Place Value grouping"` added to the `<input>`.
+  - The compact-landscape `@media (max-height: 500px)` rule that hid `.pv-toggle-label` was removed (no longer needed).
 
-- Pull bead behavior:
-  - A 40 px chrome sphere (`.pull-bead`) lives inside `.tray` as an absolutely-positioned child.
-  - Position: `left = quantity × slotW + trayPad` (derived from `slot-1.offsetWidth` and `slot-1.offsetLeft` so it is zoom-aware).
-  - On mousedown / touchstart the bead enters dragging state.
-  - Document-level mousemove / touchmove compute `delta = Math.round(dx / slotW)` from the drag-start clientX, clamp to [0, 150], set `quantity`, call `renderBlocks()` and `ensureBeadVisible()`.
-  - `ensureBeadVisible()` uses `getBoundingClientRect()` to auto-scroll the container within 72 px of the scroller's visible edge.
-  - Mouse pan of the scroller (click-drag on empty track) is preserved; explicitly skips the bead target.
-  - Workspace axis-locked touch-pan is preserved and also skips the bead target.
+- Bead position/scale:
+  - Bead diameter reduced from 40 px to 20 px — now a small metal knob rather than a large sphere.
+  - Vertical positioning changed from `top: 50%; transform: translate(-50%, -50%)` to `bottom: 7px; transform: translateX(-50%)` — bead now sits on the bottom rail of the tray, clear of the cube/stick blocks above it.
+  - Z-index raised from 60 to 1000 so the bead renders above the `tray::after` decorative strip (z-index 999).
+  - Grip lines scaled down proportionally (8 px tall, 1.5 px wide, 4 px gaps).
+  - Hover/dragging transforms updated to use `translateX(-50%) scale(…)` to match the new base transform.
+  - JS drag logic and `positionBead()` formula unchanged — bead still leads from the first empty slot boundary.
 
-- Place Value toggle behavior:
-  - Apple-style 48 × 28 px pill toggle in the header, labelled "Place Value".
-  - OFF (default): all `quantity` units rendered as red `.cube` elements in their respective `.slot` — raw unit display.
-  - ON: `Math.floor(quantity / 10)` blue `.ten-bar` elements plus `quantity % 10` red `.cube` elements — auto-fused display.
-  - Toggle re-renders synchronously on `change`; replaces tap-to-fuse / tap-to-break entirely.
+- Numeral alignment fix:
+  - Added `padding-left: var(--tray-pad); padding-right: var(--tray-pad)` to both `.number-line-top` and `.number-line-bottom`.
+  - This matches the tray's internal horizontal padding so each `width: var(--slot-w)` label cell lines up with its corresponding slot cell. Previously the label rows had no padding offset, causing an off-by-trayPad shift between labels and slots.
 
-- Mobile behavior:
-  - `body { height: 100dvh; overflow: hidden }` + `flex: 1` on `.workspace` and `.tray-scroller` — track fills remaining viewport; never below the fold.
-  - `@media (max-height: 500px)` compact mode: header 48 px, total 3 rem, workspace padding 6 px, "Place Value" text hidden (pill visible).
-  - Horizontal track pan via `touch-action: pan-x` on scroller + workspace axis-locked handler.
-  - Bead touchstart is `{ passive: false }` + `preventDefault()` + `stopPropagation()`.
-  - `env(safe-area-inset-bottom)` on `.tray-scroller` padding-bottom for iOS home-indicator clearance.
+- What was preserved:
+  - Drag bead right to create units; drag left to remove units.
+  - Place Value off: raw red unit cubes. Place Value on: groups of ten as blue ten-sticks with leftover red cubes.
+  - Live quantity numeral with pop animation.
+  - Horizontal panning/scrolling on mobile (touch-action: pan-x + axis-locked handler).
+  - Mobile landscape compact layout.
+  - `ensureBeadVisible()` auto-scroll behaviour.
+  - Mouse-pan on empty track.
+  - All zoom scaling via CSS custom property `--zoom`.
 
-- What remains placeholder / not yet implemented:
-  - Grid mode (pull quantity into a flat array) — next Dimensional Builder mode, not yet built.
+- What remains for later passes:
+  - Grid/Array mode — not yet built.
+  - Enameled cast-iron / brushed-metal material redesign — deferred.
   - Keyboard stepping of the bead (ArrowLeft / ArrowRight).
-  - Undo / step-back affordance.
+  - Reset affordance (button or double-tap bead).
+  - Zoom slider label/tooltip.
 
 - Risks / tradeoffs:
   - Document-level `touchmove` is `{ passive: false }` but calls `preventDefault()` only when `beadDragging` is true; other touches are unblocked immediately.
