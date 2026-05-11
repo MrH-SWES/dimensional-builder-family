@@ -28,6 +28,7 @@
             /* Master Palette */
             --tens: #4169E1;
             --ones: #DC143C;
+            --hundreds: #C8A000;
 
             /* Interaction */
             --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -509,25 +510,48 @@
 
         /* ── ARRAY SURFACE (unified grid body) ── */
         .array-surface {
-            display: none; /* shown by JS in grid mode when rows > 1 */
-            flex-direction: column;
+            display: none; /* shown by JS in grid mode */
             background: #E5E5EA;
             border: 1px solid rgba(0,0,0,0.1);
             border-top: none;
-            border-radius: 0 0 16px 16px;
+            border-bottom: none;
+            border-radius: 0;
             overflow: hidden;
             position: relative;
-        }
-        /* Array row — no individual tray styling, unified surface */
-        .array-row {
-            display: flex;
             flex-shrink: 0;
-            position: relative;
-            border-top: 1px solid rgba(0,0,0,0.08);
         }
-        /* Override slot border-radius inside array rows */
-        .array-row .slot:first-child { border-radius: 0; }
-        .array-row .slot.last-visible { border-radius: 0 !important; }
+
+        /* ── GRID BOTTOM RAIL (moving bottom boundary) ── */
+        .grid-bottom-rail {
+            display: none; /* shown by JS in grid mode when quantity > 0 */
+            height: 10px;
+            background: linear-gradient(to bottom, #D0D0D5 0%, #C4C4CA 100%);
+            border: 1px solid rgba(0,0,0,0.12);
+            border-top: 2px solid rgba(0,0,0,0.20);
+            border-radius: 0 0 16px 16px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.14), 0 2px 4px rgba(0,0,0,0.08);
+            flex-shrink: 0;
+            pointer-events: none;
+        }
+
+        /* ── FLAT BLOCKS (Grid mode absolute-positioned) ── */
+        /* Ten-stick row in grid mode */
+        .flat-ten {
+            position: absolute;
+            height: var(--slot-w);
+            pointer-events: none;
+            box-sizing: border-box;
+            border-radius: calc(4px * var(--zoom));
+            box-shadow: var(--shadow-block);
+        }
+        /* Hundred-flat (10×10) in grid mode */
+        .flat-hundred {
+            position: absolute;
+            pointer-events: none;
+            box-sizing: border-box;
+            border-radius: calc(6px * var(--zoom));
+            box-shadow: var(--shadow-block);
+        }
 
         /* ── Y-BEAD ── */
         .y-bead {
@@ -611,16 +635,43 @@
         body.grid-mode .number-line-bottom,
         body.grid-mode .y-axis-area,
         body.grid-mode .y-axis-track,
-        body.grid-mode .array-surface,
-        body.grid-mode .array-row {
+        body.grid-mode .array-surface {
             touch-action: pan-x pan-y;
         }
-        /* Connect nlTray to array-surface: flat bottom in grid mode */
+
+        /* x-axis rail: flatten nlTray into a thin rail (one cell tall, no padding) */
         body.grid-mode #nlTray {
+            height: var(--slot-w);
+            padding-top: 0;
+            padding-bottom: 0;
+            min-height: unset;
+            box-shadow: none;
             border-radius: 16px 16px 0 0;
             border-bottom-width: 0;
         }
         body.grid-mode #nlTray::after { display: none; }
+
+        /* x-axis bead rides the rail centerline */
+        body.grid-mode .pull-bead {
+            bottom: auto;
+            top: 50%;
+            transform: translateX(-50%) translateY(-50%);
+        }
+        body.grid-mode .pull-bead:hover {
+            transform: translateX(-50%) translateY(-50%) scale(1.2);
+        }
+        body.grid-mode .pull-bead.dragging {
+            transform: translateX(-50%) translateY(-50%) scale(1.25);
+        }
+
+        /* y-axis track: zero vertical padding so y-slots align flush with array rows */
+        body.grid-mode .y-axis-track {
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        /* First y-slot: no individual top radius inside the track */
+        body.grid-mode .y-slot:first-child { border-radius: 0; }
+
         /* Hide per-decade bottom labels in grid mode */
         body.grid-mode #nlBot { display: none; }
         /* Smaller record text to fit "x × y = total" */
@@ -709,6 +760,7 @@
                     <div class="number-line-top" id="nlTop"></div>
                     <div class="tray" id="nlTray"></div>
                     <div class="array-surface" id="arraySurface"></div>
+                    <div class="grid-bottom-rail" id="gridBottomRail"></div>
                     <div class="number-line-bottom" id="nlBot"></div>
                 </div>
             </div>
@@ -738,6 +790,7 @@
         const yAxisArea  = document.getElementById('yAxisArea');
         const yAxisTrack = document.getElementById('yAxisTrack');
         const arraySurface = document.getElementById('arraySurface');
+        const gridBottomRail = document.getElementById('gridBottomRail');
 
         // Bead element — created in bootstrap after initBoard()
         let bead = null;
@@ -846,61 +899,65 @@
         function renderBlocks(animFlags) {
             nlTray.querySelectorAll('.cube, .ten-bar').forEach(el => el.remove());
 
-            const { w: slotW, pad: trayPad } = getSlotMetrics();
+            // In Grid mode the nlTray is the x-axis rail only — no blocks live in it.
+            // All content is rendered into the arraySurface below.
+            if (mode !== 'grid') {
+                const { w: slotW, pad: trayPad } = getSlotMetrics();
 
-            if (placeValueMode) {
-                const tens = Math.floor(quantity / 10);
-                const ones = quantity % 10;
-                let cur = 1;
+                if (placeValueMode) {
+                    const tens = Math.floor(quantity / 10);
+                    const ones = quantity % 10;
+                    let cur = 1;
 
-                for (let t = 0; t < tens; t++) {
-                    const bar = document.createElement('div');
-                    bar.className = 'ten-bar';
-                    // Position using measured metrics so zoom changes are instant
-                    bar.style.left = (trayPad + (cur - 1) * slotW) + 'px';
-                    for (let j = 0; j < 10; j++) {
-                        const seg = document.createElement('div');
-                        seg.className = 'ten-segment';
-                        bar.appendChild(seg);
+                    for (let t = 0; t < tens; t++) {
+                        const bar = document.createElement('div');
+                        bar.className = 'ten-bar';
+                        // Position using measured metrics so zoom changes are instant
+                        bar.style.left = (trayPad + (cur - 1) * slotW) + 'px';
+                        for (let j = 0; j < 10; j++) {
+                            const seg = document.createElement('div');
+                            seg.className = 'ten-segment';
+                            bar.appendChild(seg);
+                        }
+                        nlTray.appendChild(bar);
+                        cur += 10;
                     }
-                    nlTray.appendChild(bar);
-                    cur += 10;
+                    for (let o = 0; o < ones; o++) {
+                        const cube = document.createElement('div');
+                        cube.className = 'cube';
+                        const slot = document.getElementById(`slot-${cur}`);
+                        if (slot) slot.appendChild(cube);
+                        cur++;
+                    }
+                } else {
+                    // PV off: all raw red unit cubes
+                    for (let o = 0; o < quantity; o++) {
+                        const cube = document.createElement('div');
+                        cube.className = 'cube';
+                        const slot = document.getElementById(`slot-${o + 1}`);
+                        if (slot) slot.appendChild(cube);
+                    }
                 }
-                for (let o = 0; o < ones; o++) {
-                    const cube = document.createElement('div');
-                    cube.className = 'cube';
-                    const slot = document.getElementById(`slot-${cur}`);
-                    if (slot) slot.appendChild(cube);
-                    cur++;
-                }
-            } else {
-                // PV off: all raw red unit cubes
-                for (let o = 0; o < quantity; o++) {
-                    const cube = document.createElement('div');
-                    cube.className = 'cube';
-                    const slot = document.getElementById(`slot-${o + 1}`);
-                    if (slot) slot.appendChild(cube);
-                }
-            }
 
-            // ── Tactile feedback animations ──
-            if (animFlags && animFlags.newTen) {
-                // Heavier thud: animate the last (newest) ten-bar
-                const bars = nlTray.querySelectorAll('.ten-bar');
-                if (bars.length > 0) {
-                    const lastBar = bars[bars.length - 1];
-                    void lastBar.offsetWidth; // force reflow so animation restarts
-                    lastBar.classList.add('ten-merge');
-                    vibrate([18]);
-                }
-            } else if (animFlags && animFlags.newUnit) {
-                // Light snap: animate only the most recently added cube
-                const cubes = nlTray.querySelectorAll('.cube');
-                if (cubes.length > 0) {
-                    const lastCube = cubes[cubes.length - 1];
-                    void lastCube.offsetWidth;
-                    lastCube.classList.add('unit-snap');
-                    vibrate([8]);
+                // ── Tactile feedback animations ──
+                if (animFlags && animFlags.newTen) {
+                    // Heavier thud: animate the last (newest) ten-bar
+                    const bars = nlTray.querySelectorAll('.ten-bar');
+                    if (bars.length > 0) {
+                        const lastBar = bars[bars.length - 1];
+                        void lastBar.offsetWidth; // force reflow so animation restarts
+                        lastBar.classList.add('ten-merge');
+                        vibrate([18]);
+                    }
+                } else if (animFlags && animFlags.newUnit) {
+                    // Light snap: animate only the most recently added cube
+                    const cubes = nlTray.querySelectorAll('.cube');
+                    if (cubes.length > 0) {
+                        const lastCube = cubes[cubes.length - 1];
+                        void lastCube.offsetWidth;
+                        lastCube.classList.add('unit-snap');
+                        vibrate([8]);
+                    }
                 }
             }
 
@@ -909,6 +966,7 @@
             renderYAxisTrack();
             renderArraySurface();
             if (mode === 'grid') alignYAxis();
+            renderGridBottomRail();
 
             positionBead();
             updateTrackVisibility();
@@ -945,70 +1003,158 @@
         }
 
         // ── RENDER ARRAY SURFACE ──
-        // Builds the unified array body for rows 2..rows below the x-axis tray.
+        // Builds the unified array body for rows 1..rows using absolute-positioned
+        // flat blocks. Hundred-flats (10×10) are rendered first when PV is on,
+        // then ten-sticks for remaining rows/columns, then unit cells.
         function renderArraySurface() {
             arraySurface.innerHTML = '';
-            if (mode !== 'grid' || quantity === 0 || rows <= 1) {
+            arraySurface.style.backgroundImage = '';
+            arraySurface.style.backgroundPosition = '';
+
+            if (mode !== 'grid' || quantity === 0) {
                 arraySurface.style.display = 'none';
+                arraySurface.style.height = '';
                 return;
             }
-            arraySurface.style.display = 'flex';
+
             const { w: slotW, pad: trayPad } = getSlotMetrics();
-            const visMax = getVisibleMax();
-            for (let r = 2; r <= rows; r++) {
-                const rowEl = document.createElement('div');
-                rowEl.className = 'array-row';
-                for (let i = 1; i <= visMax; i++) {
-                    const decadeIdx = Math.floor((i - 1) / 10);
-                    const theme = decadeIdx % 2 === 0 ? 'bg-light' : 'bg-dark';
-                    const slot = document.createElement('div');
-                    slot.className = `slot ${theme}`;
-                    if (i === visMax) slot.classList.add('last-visible');
-                    rowEl.appendChild(slot);
+
+            // Exact pixel height for the array body
+            arraySurface.style.display = 'block';
+            arraySurface.style.height = (rows * slotW) + 'px';
+
+            // Background: alternating light/dark decade columns + subtle row seams
+            const colW = slotW * 10;
+            arraySurface.style.backgroundImage = [
+                // Row seams (1 px line at the bottom of each row)
+                `repeating-linear-gradient(to bottom,` +
+                    `transparent 0px,transparent ${slotW - 1}px,` +
+                    `rgba(0,0,0,0.07) ${slotW - 1}px,rgba(0,0,0,0.07) ${slotW}px)`,
+                // Alternating decade column shading
+                `repeating-linear-gradient(to right,` +
+                    `#FFFFFF 0px,#FFFFFF ${colW}px,` +
+                    `#D1D1D6 ${colW}px,#D1D1D6 ${colW * 2}px)`
+            ].join(',');
+            // Shift column pattern so it aligns with the tray slots (which start at trayPad)
+            arraySurface.style.backgroundPosition = `${trayPad}px 0`;
+            arraySurface.style.backgroundSize = 'auto';
+
+            if (placeValueMode) {
+                // How many complete 10-column groups and 10-row groups exist
+                const hundredCols = Math.floor(quantity / 10);
+                const hundredRows = Math.floor(rows / 10);
+
+                // ── Hundred-flats: one square div per complete 10×10 block ──
+                for (let hr = 0; hr < hundredRows; hr++) {
+                    for (let hc = 0; hc < hundredCols; hc++) {
+                        const flat = document.createElement('div');
+                        flat.className = 'flat-hundred';
+                        flat.style.left  = (trayPad + hc * 10 * slotW) + 'px';
+                        flat.style.top   = (hr * 10 * slotW) + 'px';
+                        flat.style.width  = (10 * slotW) + 'px';
+                        flat.style.height = (10 * slotW) + 'px';
+                        // Golden yellow base + seam grid (1 px lines every cellSize)
+                        flat.style.backgroundColor = 'var(--hundreds)';
+                        flat.style.backgroundImage = [
+                            `repeating-linear-gradient(to right,` +
+                                `transparent 0px,transparent ${slotW - 1}px,` +
+                                `rgba(0,0,0,0.09) ${slotW - 1}px,rgba(0,0,0,0.09) ${slotW}px)`,
+                            `repeating-linear-gradient(to bottom,` +
+                                `transparent 0px,transparent ${slotW - 1}px,` +
+                                `rgba(0,0,0,0.09) ${slotW - 1}px,rgba(0,0,0,0.09) ${slotW}px)`
+                        ].join(',');
+                        arraySurface.appendChild(flat);
+                    }
                 }
-                const slots = rowEl.querySelectorAll('.slot');
-                if (placeValueMode) {
-                    const tens = Math.floor(quantity / 10);
-                    const ones = quantity % 10;
-                    let cur = 1;
+
+                // ── Ten-sticks and unit cells for the remainder ──
+                for (let r = 0; r < rows; r++) {
+                    // For rows inside the hundred-flat zone, only draw the columns
+                    // that lie to the right of the hundred-flats.
+                    const inHundredZone = (r < hundredRows * 10);
+                    const startCol = inHundredZone ? hundredCols * 10 : 0;
+                    const colCount  = quantity - startCol;
+                    if (colCount <= 0) continue;
+
+                    const y    = r * slotW;
+                    const tens = Math.floor(colCount / 10);
+                    const ones = colCount % 10;
+
+                    // Ten-sticks
                     for (let t = 0; t < tens; t++) {
                         const bar = document.createElement('div');
-                        bar.className = 'ten-bar';
-                        bar.style.left = (trayPad + (cur - 1) * slotW) + 'px';
-                        for (let j = 0; j < 10; j++) {
-                            const seg = document.createElement('div');
-                            seg.className = 'ten-segment';
-                            bar.appendChild(seg);
-                        }
-                        rowEl.appendChild(bar);
-                        cur += 10;
+                        bar.className = 'flat-ten';
+                        bar.style.left  = (trayPad + (startCol + t * 10) * slotW) + 'px';
+                        bar.style.top   = y + 'px';
+                        bar.style.width = (10 * slotW) + 'px';
+                        bar.style.backgroundColor = 'var(--tens)';
+                        // Subtle seam lines between unit divisions
+                        bar.style.backgroundImage =
+                            `repeating-linear-gradient(to right,` +
+                                `transparent 0px,transparent ${slotW - 1}px,` +
+                                `rgba(0,0,0,0.12) ${slotW - 1}px,rgba(0,0,0,0.12) ${slotW}px)`;
+                        arraySurface.appendChild(bar);
                     }
+
+                    // Unit cells
                     for (let o = 0; o < ones; o++) {
-                        const cube = document.createElement('div');
-                        cube.className = 'cube';
-                        if (slots[cur - 1]) slots[cur - 1].appendChild(cube);
-                        cur++;
-                    }
-                } else {
-                    for (let o = 0; o < quantity; o++) {
-                        const cube = document.createElement('div');
-                        cube.className = 'cube';
-                        if (slots[o]) slots[o].appendChild(cube);
+                        const cell = document.createElement('div');
+                        cell.className = 'flat-ten'; // reuse positioning CSS
+                        cell.style.left            = (trayPad + (startCol + tens * 10 + o) * slotW) + 'px';
+                        cell.style.top             = y + 'px';
+                        cell.style.width           = slotW + 'px';
+                        cell.style.backgroundColor = 'var(--ones)';
+                        cell.style.backgroundImage = 'none';
+                        cell.style.borderRadius    = `calc(4px * var(--zoom))`;
+                        arraySurface.appendChild(cell);
                     }
                 }
-                arraySurface.appendChild(rowEl);
+            } else {
+                // PV off: one big red rectangle covers the whole active area,
+                // with a subtle seam grid so rows and columns remain countable.
+                if (quantity > 0 && rows > 0) {
+                    const active = document.createElement('div');
+                    active.style.position  = 'absolute';
+                    active.style.left      = trayPad + 'px';
+                    active.style.top       = '0';
+                    active.style.width     = (quantity * slotW) + 'px';
+                    active.style.height    = (rows * slotW) + 'px';
+                    active.style.backgroundColor = 'var(--ones)';
+                    active.style.backgroundImage = [
+                        `repeating-linear-gradient(to bottom,` +
+                            `transparent 0px,transparent ${slotW - 1}px,` +
+                            `rgba(0,0,0,0.08) ${slotW - 1}px,rgba(0,0,0,0.08) ${slotW}px)`,
+                        `repeating-linear-gradient(to right,` +
+                            `transparent 0px,transparent ${slotW - 1}px,` +
+                            `rgba(0,0,0,0.08) ${slotW - 1}px,rgba(0,0,0,0.08) ${slotW}px)`
+                    ].join(',');
+                    active.style.pointerEvents = 'none';
+                    arraySurface.appendChild(active);
+                }
             }
+        }
+
+        // ── RENDER GRID BOTTOM RAIL ──
+        // Shows the moving bottom boundary of the array when in Grid mode.
+        function renderGridBottomRail() {
+            if (mode !== 'grid' || quantity === 0) {
+                gridBottomRail.style.display = 'none';
+                return;
+            }
+            gridBottomRail.style.display = 'block';
         }
 
         // ── ALIGN Y-AXIS ──
-        // Offset the y-axis-track by the height of nlTop so row-1 aligns with the x-axis tray.
+        // Offset the y-axis-track by the height of nlTop + nlTray so that
+        // y-slot 1 aligns exactly with the first row of arraySurface.
         function alignYAxis() {
             if (mode !== 'grid') return;
-            yAxisTrack.style.marginTop = nlTop.offsetHeight + 'px';
+            yAxisTrack.style.marginTop = (nlTop.offsetHeight + nlTray.offsetHeight) + 'px';
         }
 
         // ── POSITION Y-BEAD ──
-        // Places the y-bead centered on the y-axis track, at its bottom edge.
+        // Places the y-bead centered on the y-axis track centerline,
+        // at the bottom of the active rows.
         function positionYBead() {
             if (!yBead) return;
             if (mode !== 'grid' || quantity === 0) {
@@ -1016,11 +1162,11 @@
                 return;
             }
             yBead.style.display = 'flex';
-            // Center horizontally on the y-axis area
-            yBead.style.left = (yAxisArea.offsetWidth / 2) + 'px';
-            // Bottom edge of the y-axis track
-            const trackBottom = yAxisTrack.offsetTop + yAxisTrack.offsetHeight;
-            yBead.style.top = trackBottom + 'px';
+            const { w: slotW } = getSlotMetrics();
+            // Horizontal: center of the y-axis track (relative to yAxisArea which is positioned)
+            yBead.style.left = (yAxisTrack.offsetLeft + yAxisTrack.offsetWidth / 2) + 'px';
+            // Vertical: bottom of the active rows within the track
+            yBead.style.top  = (yAxisTrack.offsetTop + rows * slotW) + 'px';
         }
 
         // ── SET MODE ──
