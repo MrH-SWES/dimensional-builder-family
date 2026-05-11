@@ -146,9 +146,7 @@
         .pv-pill input:checked + .pv-pill-track { background: var(--accent); }
         .pv-pill input:checked + .pv-pill-track .pv-pill-thumb { left: 22px; }
 
-        /* ── ZOOM ── */
-        .zoom-controls { display: flex; align-items: center; gap: 10px; color: var(--text-light); }
-        .zoom-slider { width: 72px; cursor: pointer; accent-color: var(--accent); }
+        /* zoom is now app-owned (pinch / wheel / keyboard); no visible slider */
 
         /* ── WORKSPACE ── */
         .workspace {
@@ -466,12 +464,7 @@
                     <span class="pv-pill-track"><span class="pv-pill-thumb"></span></span>
                 </label>
             </div>
-            <div class="zoom-controls">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <input type="range" id="zoomSlider" class="zoom-slider" min="0.3" max="1.2" step="0.1" value="1">
-            </div>
+
         </div>
     </header>
 
@@ -501,18 +494,36 @@
         const nlTray  = document.getElementById('nlTray');
         const nlBot   = document.getElementById('nlBot');
         const scroller = document.getElementById('scrollContainer');
-        const zoomSlider = document.getElementById('zoomSlider');
         const pvToggle   = document.getElementById('pvToggle');
         const totalDisplay = document.getElementById('boardTotal');
 
         // Bead element — created in bootstrap after initBoard()
         let bead = null;
 
-        // ── ZOOM ──
-        zoomSlider.addEventListener('input', (e) => {
-            document.documentElement.style.setProperty('--zoom', e.target.value);
+        // ── ZOOM (app-owned; no visible slider) ──
+        let zoom = 1;
+        const ZOOM_MIN = 0.3, ZOOM_MAX = 1.2;
+
+        // Set zoom, optionally preserving the visual position of focalClientX
+        // (a clientX coordinate) on the scroller.
+        function setZoom(newZoom, focalClientX) {
+            newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+            if (Math.abs(newZoom - zoom) < 0.001) return;
+            const ratio = newZoom / zoom;
+            let savedContentX, savedRelX;
+            if (focalClientX !== undefined) {
+                const sr = scroller.getBoundingClientRect();
+                savedRelX    = focalClientX - sr.left;
+                savedContentX = scroller.scrollLeft + savedRelX;
+            }
+            zoom = newZoom;
+            document.documentElement.style.setProperty('--zoom', zoom);
             renderBlocks();
-        });
+            // Shift scroll so the focal content position stays under the finger/cursor
+            if (savedContentX !== undefined) {
+                scroller.scrollLeft = savedContentX * ratio - savedRelX;
+            }
+        }
 
         // ── PLACE VALUE TOGGLE ──
         pvToggle.addEventListener('change', () => {
@@ -709,23 +720,56 @@
             scroller.scrollLeft = panScrollLeft - (x - panStartX) * 1.5;
         });
 
-        // ── WORKSPACE TOUCH PAN (axis-locked) ──
-        // Horizontal swipes anywhere on the workspace pan the scroller.
-        // Vertical swipes fall through (body overflow is hidden, so they're no-ops,
-        // but the handler stays for forward-compat if the layout ever needs body scroll).
+        // ── WORKSPACE TOUCH PAN + PINCH-TO-ZOOM ──
+        // One finger → horizontal pan.  Two fingers (no bead) → pinch zoom.
         const workspace = document.querySelector('.workspace');
         let wsTouchStartX = null, wsTouchStartY = null,
             wsScrollLeft  = null, wsAxisLocked   = null;
+        let pinchActive = false, pinchStartDist = 0, pinchStartZoom = 1;
+        let pinchRafId = null, pendingPinchZoom = null, pendingPinchMidX = null;
+
+        function touchDist(t0, t1) {
+            return Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        }
+
+        function flushPinchZoom() {
+            pinchRafId = null;
+            if (pendingPinchZoom !== null) {
+                setZoom(pendingPinchZoom, pendingPinchMidX);
+                pendingPinchZoom = null;
+            }
+        }
 
         workspace.addEventListener('touchstart', (e) => {
+            // Two-finger pinch — only when the bead is not already being dragged
+            if (e.touches.length === 2 && !beadDragging) {
+                pinchActive    = true;
+                pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+                pinchStartZoom = zoom;
+                wsTouchStartX  = null; // cancel any ongoing pan
+                e.preventDefault();   // stop browser from attempting its own zoom
+                return;
+            }
+            if (e.touches.length !== 1) return;
             if (e.target.closest('.pull-bead, input')) return;
             wsTouchStartX = e.touches[0].clientX;
             wsTouchStartY = e.touches[0].clientY;
             wsScrollLeft  = scroller.scrollLeft;
             wsAxisLocked  = null;
-        }, { passive: true });
+            pinchActive   = false;
+        }, { passive: false });
 
         workspace.addEventListener('touchmove', (e) => {
+            if (pinchActive && e.touches.length === 2) {
+                e.preventDefault();
+                const dist  = touchDist(e.touches[0], e.touches[1]);
+                const midX  = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                // Throttle DOM work to one update per animation frame
+                pendingPinchZoom = pinchStartZoom * (dist / pinchStartDist);
+                pendingPinchMidX = midX;
+                if (!pinchRafId) pinchRafId = requestAnimationFrame(flushPinchZoom);
+                return;
+            }
             if (wsTouchStartX === null) return;
             const dx = e.touches[0].clientX - wsTouchStartX;
             const dy = e.touches[0].clientY - wsTouchStartY;
@@ -739,8 +783,15 @@
             }
         }, { passive: false });
 
-        workspace.addEventListener('touchend', () => {
-            wsTouchStartX = wsTouchStartY = wsScrollLeft = wsAxisLocked = null;
+        workspace.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                pinchActive = false;
+                if (pinchRafId) { cancelAnimationFrame(pinchRafId); pinchRafId = null; }
+                pendingPinchZoom = pendingPinchMidX = null;
+            }
+            if (e.touches.length === 0) {
+                wsTouchStartX = wsTouchStartY = wsScrollLeft = wsAxisLocked = null;
+            }
         });
 
         // ── BEAD DRAG ──
@@ -790,6 +841,30 @@
         }, { passive: false });
         document.addEventListener('touchend',    endBeadDrag);
         document.addEventListener('touchcancel', endBeadDrag);
+
+        // ── CTRL+WHEEL / TRACKPAD PINCH ZOOM (desktop) ──
+        // Only intercept when Ctrl is held so normal page scrolling is untouched.
+        // On macOS trackpads Chrome/Safari report ctrlKey+wheel for pinch gestures:
+        //   deltaY < 0  →  fingers spreading apart  →  zoom in  (+step)
+        //   deltaY > 0  →  fingers pinching together →  zoom out (−step)
+        scroller.addEventListener('wheel', (e) => {
+            if (!e.ctrlKey) return;
+            e.preventDefault();
+            const step = e.deltaY < 0 ? 0.1 : -0.1;
+            setZoom(zoom + step, e.clientX);
+        }, { passive: false });
+
+        // ── KEYBOARD + / - ZOOM ──
+        document.addEventListener('keydown', (e) => {
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+            const zoomIn  = e.key === '+' || e.key === '=';
+            const zoomOut = e.key === '-' || e.key === '_';
+            if (!zoomIn && !zoomOut) return;
+            e.preventDefault();
+            const sr = scroller.getBoundingClientRect();
+            const cx = sr.left + sr.width / 2;
+            setZoom(zoom + (zoomIn ? 0.1 : -0.1), cx);
+        });
 
         // ── BOOTSTRAP ──
         initBoard();
