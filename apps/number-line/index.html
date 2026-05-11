@@ -637,6 +637,8 @@
         let rows = 1;      // y-axis row count (Grid mode)
         const MAX_CAPACITY = 150;
         const MAX_ROWS = 20;
+        // Fallback row height (px) used when nlTray.offsetHeight is unavailable (e.g. zero-quantity initial render)
+        const DEFAULT_ROW_HEIGHT = 80;
 
         // ── ELEMENTS ──
         const nlTop   = document.getElementById('nlTop');
@@ -685,6 +687,7 @@
         function updateRunningTotal() {
             let newText;
             if (mode === 'grid') {
+                // In Grid mode: quantity = x (column count), rows = y; show x × y = total
                 newText = quantity === 0 ? '0' : `${quantity} × ${rows} = ${quantity * rows}`;
             } else {
                 newText = String(quantity);
@@ -1110,7 +1113,8 @@
 
         function updateYBeadDrag(clientY) {
             if (!yBeadDragging) return;
-            const rowHeight = nlTray.offsetHeight || 80;
+            // rowHeight: height of one row in screen pixels; fallback to DEFAULT_ROW_HEIGHT
+            const rowHeight = nlTray.offsetHeight || DEFAULT_ROW_HEIGHT;
             const delta = Math.round((clientY - yBeadStartClientY) / rowHeight);
             const newRows = Math.max(1, Math.min(MAX_ROWS, yBeadStartRows + delta));
             if (newRows !== rows) {
