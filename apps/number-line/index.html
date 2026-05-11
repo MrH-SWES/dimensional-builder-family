@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
-    <title>Number Line | Math Things.</title>
+    <title>Line Builder | Math Things.</title>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;800;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -16,26 +16,26 @@
             --text-light: #AEAEB2;
             --accent: #007AFF;
             --border: rgba(0,0,0,0.05);
-            
+
             --shadow-soft: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.03);
             --shadow-heavy: 0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08);
-            --shadow-block: 
+            --shadow-block:
                 inset 2px 2px 0 rgba(255,255,255,0.4),
                 inset -2px -2px 0 rgba(0,0,0,0.12),
                 0 8px 20px rgba(0,0,0,0.12),
                 1px -1px 0 rgba(0,0,0,0.08);
 
-            /* Master Palette — alternating warm/cool from Ones */
-            --tens: #4169E1; /* Cool Blue */
-            --ones: #DC143C; /* Warm Red */
-            
-            /* Interaction Variables */
+            /* Master Palette */
+            --tens: #4169E1;
+            --ones: #DC143C;
+
+            /* Interaction */
             --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
             --zoom: 1;
-            
+
             /* Dynamic Scaling */
-            --slot-w: calc(64px * var(--zoom)); 
-            --cube-base: calc(54px * var(--zoom)); 
+            --slot-w: calc(64px * var(--zoom));
+            --cube-base: calc(54px * var(--zoom));
             --depth: calc(12px * var(--zoom));
             --tray-pad: calc(6px * var(--zoom));
             --font-anchor: calc(24px * var(--zoom));
@@ -48,12 +48,10 @@
             font-family: 'Lexend', sans-serif;
             background: var(--bg);
             color: var(--text-main);
-            min-height: 100dvh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
-            /* Allow vertical scroll so mobile landscape can reach the number line */
-            overflow-y: auto;
-            touch-action: pan-y;
+            overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
             -webkit-font-smoothing: antialiased;
@@ -65,23 +63,24 @@
             backdrop-filter: blur(40px);
             -webkit-backdrop-filter: blur(40px);
             border-bottom: 1px solid var(--border);
-            padding: 0 32px;
-            height: 80px; 
+            padding: 0 24px;
+            height: 64px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-shrink: 0;
             z-index: 100;
+            gap: 12px;
         }
 
         .logo {
             display: inline-flex;
             align-items: baseline;
             font-weight: 900;
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             letter-spacing: -0.05em;
             color: var(--text-main);
-            width: 180px;
+            flex-shrink: 0;
         }
 
         /* The Bead */
@@ -94,90 +93,121 @@
             box-shadow: inset 1px 1px 2px rgba(255,255,255,0.8), inset -1px -1px 2px rgba(0,0,0,0.2), 0 2px 5px rgba(0,0,0,0.22);
             transition: transform 0.35s var(--spring);
         }
-
         .logo:hover .logo-bead { transform: scale(1.4) translateY(-0.04em); }
 
+        /* ── HEADER CONTROLS ── */
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* ── PLACE VALUE PILL TOGGLE ── */
+        .pv-toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pv-toggle-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--text-gray);
+            white-space: nowrap;
+        }
+        .pv-pill {
+            position: relative;
+            width: 48px;
+            height: 28px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .pv-pill input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+        .pv-pill-track {
+            position: absolute;
+            inset: 0;
+            background: #E5E5EA;
+            border-radius: 14px;
+            transition: background 0.25s ease;
+            display: block;
+        }
+        .pv-pill-thumb {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.22);
+            transition: left 0.25s var(--spring);
+        }
+        .pv-pill input:checked + .pv-pill-track { background: var(--accent); }
+        .pv-pill input:checked + .pv-pill-track .pv-pill-thumb { left: 22px; }
+
         /* ── ZOOM ── */
-        .zoom-controls { display: flex; align-items: center; gap: 12px; color: var(--text-light); }
-        .zoom-slider { width: 80px; cursor: pointer; accent-color: var(--accent); }
+        .zoom-controls { display: flex; align-items: center; gap: 10px; color: var(--text-light); }
+        .zoom-slider { width: 72px; cursor: pointer; accent-color: var(--accent); }
 
         /* ── WORKSPACE ── */
         .workspace {
-            flex: 1; display: flex; flex-direction: column; align-items: center;
-            justify-content: center; padding: 20px; position: relative;
-            gap: 2vh; 
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px 0 0 0;
+            gap: 12px;
+            min-height: 0;
+            overflow: hidden;
         }
 
         /* ── RUNNING TOTAL DISPLAY ── */
         .board-total-display {
-            font-size: 7rem; font-weight: 900; color: var(--text-main);
-            letter-spacing: -0.04em; line-height: 1;
-            transition: color 0.2s; z-index: 10; text-align: center;
-            user-select: none; text-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            margin-bottom: 8px; margin-top: 12px;
+            font-size: 5rem;
+            font-weight: 900;
+            color: var(--text-main);
+            letter-spacing: -0.04em;
+            line-height: 1;
+            text-align: center;
+            user-select: none;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            flex-shrink: 0;
         }
         .anim-total-pop { animation: totalPop 0.3s var(--spring); }
 
-        /* DASHBOARD */
-        .dashboard {
-            display: flex; gap: 40px; align-items: flex-end; justify-content: center;
-            width: 100%; max-width: 900px; margin-bottom: 20px; min-height: 140px; 
-        }
-
-        /* ── ACTION TRAY (BANK) ── */
-        .action-tray {
-            height: 140px; background: var(--surface); border-radius: 28px;
-            display: flex; align-items: center; justify-content: center; gap: 24px;
-            padding: 0 24px; box-shadow: var(--shadow-soft); border: 1px solid var(--border);
-            z-index: 50; transition: background 0.3s ease, transform 0.2s;
-        }
-
-        .action-tray.drag-over { background: #f0fdf4; border-color: #16a34a; transform: scale(1.02); }
-
-        .bank-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;}
-
-        .dispenser {
-            background: var(--bg); border: 2px dashed rgba(0,0,0,0.1);
-            border-radius: 16px; padding: 15px 20px; display: flex;
-            align-items: center; justify-content: center; min-height: 80px;
-            cursor: pointer; transition: all 0.2s;
-        }
-        
-        .dispenser:hover { border-color: rgba(0,0,0,0.2); }
-
-        /* Label styling */
-        .pv-label { font-size: 0.8rem; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; color: var(--text-gray); }
-
-        /* ── PREVIEW BLOCKS (Exact 1:10 Ratio) ── */
-        .preview-cube {
-            width: 24px; height: 24px; background: var(--ones); border-radius: 4px;
-            box-shadow: var(--shadow-block); transform: rotateX(10deg); position: relative;
-            flex-shrink: 0; cursor: grab; margin: 4px;
-        }
-
-        .preview-ten {
-            width: 240px; height: 24px; background: var(--tens); border-radius: 4px; position: relative;
-            box-shadow: var(--shadow-block); transform: rotateX(10deg);
-            display: flex; flex-shrink: 0; cursor: grab; margin: 4px;
-        }
-        .preview-ten .ten-segment { flex: 1; border-right: 1px solid rgba(0,0,0,0.15); }
-        .preview-ten .ten-segment:last-child { border-right: none; }
-
         /* ── THE NUMBER LINE ── */
         .tray-scroller {
-            width: 100%; overflow-x: auto; overflow-y: hidden; display: flex;
-            justify-content: flex-start; padding-bottom: 40px; cursor: grab;
-            /* Mobile horizontal pan: tell the browser this container scrolls sideways */
+            flex: 1;
+            align-self: stretch;
+            overflow-x: auto;
+            overflow-y: hidden;
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-start;
+            padding-bottom: max(24px, env(safe-area-inset-bottom));
+            cursor: grab;
             touch-action: pan-x;
             -webkit-overflow-scrolling: touch;
+            min-height: 0;
         }
-
         .tray-scroller::-webkit-scrollbar { display: none; }
         .tray-scroller { -ms-overflow-style: none; scrollbar-width: none; }
         .tray-scroller:active { cursor: grabbing; }
 
-        /* Give the inner wrapper extra end-padding so the last mark scrolls fully into view */
-        .tray-wrapper { position: relative; display: flex; flex-direction: column; padding: 0 80px; pointer-events: none; touch-action: pan-x; }
+        .tray-wrapper {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 0 80px;
+            pointer-events: none;
+            touch-action: pan-x;
+            flex-shrink: 0;
+        }
         .tray, .number-line-top, .number-line-bottom { pointer-events: auto; touch-action: pan-x; }
 
         .number-line-top, .number-line-bottom { display: flex; position: relative; z-index: 10; }
@@ -185,124 +215,226 @@
         .number-line-bottom { padding-top: 6px; }
 
         .tray {
-            display: flex; background: #E5E5EA; border: 1px solid rgba(0,0,0,0.1);
-            border-radius: 16px; padding: 8px var(--tray-pad); box-shadow: inset 0 4px 15px rgba(0,0,0,0.1);
-            position: relative; min-height: calc(var(--slot-w) + 16px); transition: background 0.2s, box-shadow 0.2s;
+            display: flex;
+            background: #E5E5EA;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 16px;
+            padding: 8px var(--tray-pad);
+            box-shadow: inset 0 4px 15px rgba(0,0,0,0.1);
+            position: relative;
+            min-height: calc(var(--slot-w) + 16px);
         }
 
         .tray::after {
-            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 6px;
-            background: var(--surface); z-index: 999; pointer-events: none; border-radius: 0 0 14px 14px;
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 6px;
+            background: var(--surface);
+            z-index: 999;
+            pointer-events: none;
+            border-radius: 0 0 14px 14px;
         }
 
         .slot {
-            width: var(--slot-w); height: var(--slot-w); position: relative; flex-shrink: 0;
-            display: flex; justify-content: center; align-items: flex-end; padding-bottom: calc(4px * var(--zoom));
+            width: var(--slot-w);
+            height: var(--slot-w);
+            position: relative;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: calc(4px * var(--zoom));
             touch-action: pan-x;
         }
-        
         .slot.bg-light { background: #FFFFFF; border-right: 1px solid rgba(0,0,0,0.04); box-shadow: inset 0 2px 8px rgba(0,0,0,0.02); }
-        .slot.bg-dark { background: #D1D1D6; border-right: 1px solid rgba(0,0,0,0.1); box-shadow: inset 0 2px 8px rgba(0,0,0,0.08); }
+        .slot.bg-dark  { background: #D1D1D6; border-right: 1px solid rgba(0,0,0,0.1);  box-shadow: inset 0 2px 8px rgba(0,0,0,0.08); }
         .slot:first-child { border-radius: 8px 0 0 8px; }
         .slot.last-visible { border-radius: 0 8px 8px 0 !important; border-right: none !important; }
 
-        .number-label { width: var(--slot-w); text-align: center; font-size: calc(20px * var(--zoom)); font-weight: 300; color: var(--text-light); flex-shrink: 0; }
+        .number-label {
+            width: var(--slot-w);
+            text-align: center;
+            font-size: calc(20px * var(--zoom));
+            font-weight: 300;
+            color: var(--text-light);
+            flex-shrink: 0;
+        }
         .number-label.anchor { font-weight: 800; color: var(--text-main); font-size: var(--font-anchor); }
         .number-label.bottom { font-weight: 600; font-size: var(--font-bottom); }
 
         /* ── BLOCKS ON TRACK ── */
         .cube {
-            width: var(--cube-base); height: var(--cube-base); border-radius: calc(6px * var(--zoom));
-            background: var(--ones); cursor: grab; position: absolute; transform: rotateX(10deg);
-            box-shadow: var(--shadow-block); z-index: 20; transition: transform 0.3s var(--spring), box-shadow 0.3s ease, filter 0.3s ease;
-            /* Allow horizontal pan to propagate to the scroller; manipulation enables fast click */
-            touch-action: pan-x manipulation;
+            width: var(--cube-base);
+            height: var(--cube-base);
+            border-radius: calc(6px * var(--zoom));
+            background: var(--ones);
+            position: absolute;
+            transform: rotateX(10deg);
+            box-shadow: var(--shadow-block);
+            z-index: 20;
+            pointer-events: none;
         }
 
         .ten-bar {
-            width: calc(var(--slot-w) * 10 - var(--depth)); height: var(--cube-base); border-radius: calc(6px * var(--zoom));
-            background: var(--tens); cursor: grab; position: absolute; transform: rotateX(10deg);
-            display: flex; box-shadow: var(--shadow-block); z-index: 15; transition: transform 0.3s var(--spring), box-shadow 0.3s ease, filter 0.3s ease;
-            /* Allow horizontal pan to propagate to the scroller; manipulation enables fast click */
-            touch-action: pan-x manipulation;
+            width: calc(var(--slot-w) * 10 - var(--depth));
+            height: var(--cube-base);
+            border-radius: calc(6px * var(--zoom));
+            background: var(--tens);
+            position: absolute;
+            transform: rotateX(10deg);
+            display: flex;
+            box-shadow: var(--shadow-block);
+            z-index: 15;
+            pointer-events: none;
         }
-        
         .ten-segment { flex: 1; border-right: 1px solid rgba(0,0,0,0.15); }
         .ten-segment:last-child { border-right: none; }
 
-        .cube:active, .ten-bar:active {
-            transform: scale(0.95) translateY(2px) rotateX(10deg);
-            box-shadow: inset 4px 4px 10px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.1);
-        }
-
-        /* ── NUMBER STAMPS (The "1" and "10" inside the blocks) ── */
+        /* ── NUMBER STAMPS ── */
         .cube::after {
-            content: '1'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-            font-weight: 800; color: rgba(255,255,255,0.6); font-size: calc(22px * var(--zoom)); pointer-events: none;
+            content: '1';
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; color: rgba(255,255,255,0.6);
+            font-size: calc(22px * var(--zoom));
+            pointer-events: none;
         }
         .ten-bar::before {
-            content: '10'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-            font-weight: 800; color: rgba(255,255,255,0.6); font-size: calc(22px * var(--zoom)); pointer-events: none; z-index: 5;
+            content: '10';
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; color: rgba(255,255,255,0.6);
+            font-size: calc(22px * var(--zoom));
+            pointer-events: none; z-index: 5;
         }
-        .preview-cube::after {
-            content: '1'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-            font-weight: 800; color: rgba(255,255,255,0.6); font-size: 14px; pointer-events: none;
+
+        /* ── PULL BEAD ── */
+        .pull-bead {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            top: 50%;
+            /* left is set by JS */
+            transform: translate(-50%, -50%);
+            background:
+                radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.15) 50%, transparent 70%),
+                radial-gradient(circle at 68% 72%, rgba(0,0,0,0.1) 0%, transparent 50%),
+                linear-gradient(145deg, #f2f2f2 0%, #d8d8d8 30%, #b0b0b0 58%, #c8c8c8 80%, #e8e8e8 100%);
+            box-shadow:
+                inset 1px 1px 3px rgba(255,255,255,0.85),
+                inset -1px -1px 2px rgba(0,0,0,0.18),
+                0 4px 16px rgba(0,0,0,0.28),
+                0 1px 4px rgba(0,0,0,0.14);
+            cursor: grab;
+            z-index: 60;
+            touch-action: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s var(--spring), box-shadow 0.15s ease;
         }
-        .preview-ten::before {
-            content: '10'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-            font-weight: 800; color: rgba(255,255,255,0.6); font-size: 14px; pointer-events: none; z-index: 5;
+        .pull-bead:hover {
+            transform: translate(-50%, -50%) scale(1.12);
+            box-shadow:
+                inset 1px 1px 3px rgba(255,255,255,0.85),
+                inset -1px -1px 2px rgba(0,0,0,0.18),
+                0 6px 24px rgba(0,0,0,0.32),
+                0 2px 6px rgba(0,0,0,0.16);
         }
+        .pull-bead.dragging {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(1.18);
+            box-shadow:
+                inset 1px 1px 3px rgba(255,255,255,0.85),
+                inset -1px -1px 2px rgba(0,0,0,0.18),
+                0 8px 28px rgba(0,0,0,0.35),
+                0 2px 8px rgba(0,0,0,0.18);
+        }
+
+        /* Three-line grip indicator */
+        .pull-bead-grip {
+            width: 2px;
+            height: 14px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 1px;
+            position: relative;
+        }
+        .pull-bead-grip::before,
+        .pull-bead-grip::after {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 14px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 1px;
+            top: 0;
+        }
+        .pull-bead-grip::before { left: -5px; }
+        .pull-bead-grip::after  { left:  5px; }
 
         /* ── FOOTER ── */
-        footer { text-align: center; padding: 24px; padding-bottom: max(24px, env(safe-area-inset-bottom)); font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-light); background: var(--bg); }
-        .footer-bead { display: inline-block; width: 0.22em; height: 0.22em; border-radius: 50%; margin-bottom: 0.08em; background: linear-gradient(135deg, #d8d8d8, #a0a0a0, #d0d0d0); box-shadow: 0 1px 3px rgba(0,0,0,0.2); vertical-align: baseline; }
+        footer {
+            text-align: center;
+            padding: 14px;
+            padding-bottom: max(14px, env(safe-area-inset-bottom));
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-light);
+            background: var(--bg);
+            flex-shrink: 0;
+        }
+        .footer-bead {
+            display: inline-block; width: 0.22em; height: 0.22em; border-radius: 50%;
+            margin-bottom: 0.08em;
+            background: linear-gradient(135deg, #d8d8d8, #a0a0a0, #d0d0d0);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            vertical-align: baseline;
+        }
 
         /* ── ANIMATIONS ── */
-        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-        @keyframes dropIn { 0% { transform: translateY(-40px) rotateX(10deg) scale(1.1); opacity: 0; } 100% { transform: translateY(0) rotateX(10deg) scale(1); opacity: 1; } }
-        @keyframes magicSnap { 0% { filter: brightness(1); } 50% { filter: brightness(1.5); transform: scale(1.05) rotateX(10deg); } 100% { filter: brightness(1); transform: scale(1) rotateX(10deg); } }
-        @keyframes shatterShake { 0%, 100% { transform: rotateX(10deg) translateX(0); } 25% { transform: rotateX(10deg) translateX(-4px); } 75% { transform: rotateX(10deg) translateX(4px); } }
-        @keyframes totalPop { 0% { transform: scale(1); } 50% { transform: scale(1.15); color: var(--accent); } 100% { transform: scale(1); color: var(--text-main); } }
+        @keyframes totalPop {
+            0%   { transform: scale(1); }
+            50%  { transform: scale(1.15); color: var(--accent); }
+            100% { transform: scale(1); color: var(--text-main); }
+        }
 
-        .anim-drop { animation: dropIn 0.3s var(--spring); }
-        .anim-snap { animation: magicSnap 0.4s ease-out; }
-
+        /* ── COMPACT LANDSCAPE (short viewports, e.g. phone landscape) ── */
+        @media (max-height: 500px) {
+            header { height: 48px; padding: 0 16px; }
+            .logo  { font-size: 1.1rem; }
+            .board-total-display { font-size: 3rem; }
+            .workspace { padding: 6px 0 0 0; gap: 6px; }
+            /* Hide text label on tiny screens; toggle icon still visible */
+            .pv-toggle-label { display: none; }
+        }
     </style>
 </head>
 <body>
     <header>
         <div class="logo">Math Things<span class="logo-bead"></span></div>
-        <div class="zoom-controls">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <input type="range" id="zoomSlider" class="zoom-slider" min="0.3" max="1.2" step="0.1" value="1">
+        <div class="header-controls">
+            <div class="pv-toggle-wrap">
+                <span class="pv-toggle-label">Place Value</span>
+                <label class="pv-pill" title="Toggle Place Value grouping">
+                    <input type="checkbox" id="pvToggle">
+                    <span class="pv-pill-track"><span class="pv-pill-thumb"></span></span>
+                </label>
+            </div>
+            <div class="zoom-controls">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="range" id="zoomSlider" class="zoom-slider" min="0.3" max="1.2" step="0.1" value="1">
+            </div>
         </div>
     </header>
 
     <div class="workspace">
-        
         <div id="boardTotal" class="board-total-display">0</div>
-
-        <div class="dashboard">
-            <div class="action-tray" id="freePlayBank">
-                <div class="bank-item">
-                    <div class="dispenser" id="fpCubeDispenser">
-                        <div class="preview-cube" id="fpCubeSrc" draggable="true"></div>
-                    </div>
-                    <span class="pv-label" style="color: var(--ones)">1s</span>
-                </div>
-                <div class="bank-item">
-                    <div class="dispenser" id="fpTenDispenser">
-                        <div class="preview-ten" id="fpTenSrc" draggable="true">
-                            <div class="ten-segment"></div><div class="ten-segment"></div><div class="ten-segment"></div><div class="ten-segment"></div><div class="ten-segment"></div><div class="ten-segment"></div><div class="ten-segment"></div><div class="ten-segment"></div><div class="ten-segment"></div><div class="ten-segment"></div>
-                        </div>
-                    </div>
-                    <span class="pv-label" style="color: var(--tens)">10s</span>
-                </div>
-            </div>
-        </div>
-
         <div class="tray-scroller" id="scrollContainer">
             <div class="tray-wrapper">
                 <div class="number-line-top" id="nlTop"></div>
@@ -317,114 +449,168 @@
     </footer>
 
     <script>
-        // --- STATE ---
-        let totalTens = 0;
-        let totalOnes = 0;
+        // ── STATE ──
+        let quantity = 0;
+        let placeValueMode = false;
         const MAX_CAPACITY = 150;
 
-        const nlTop = document.getElementById('nlTop');
-        const nlTray = document.getElementById('nlTray');
-        const nlBot = document.getElementById('nlBot');
+        // ── ELEMENTS ──
+        const nlTop   = document.getElementById('nlTop');
+        const nlTray  = document.getElementById('nlTray');
+        const nlBot   = document.getElementById('nlBot');
         const scroller = document.getElementById('scrollContainer');
         const zoomSlider = document.getElementById('zoomSlider');
+        const pvToggle   = document.getElementById('pvToggle');
+        const totalDisplay = document.getElementById('boardTotal');
 
+        // Bead element — created in bootstrap after initBoard()
+        let bead = null;
+
+        // ── ZOOM ──
         zoomSlider.addEventListener('input', (e) => {
             document.documentElement.style.setProperty('--zoom', e.target.value);
             renderBlocks();
         });
 
-        // --- PAN ---
-        let isDown = false;
-        let startX;
-        let scrollLeft;
-
-        scroller.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.cube') || e.target.closest('.ten-bar')) return;
-            isDown = true;
-            startX = e.pageX - scroller.offsetLeft;
-            scrollLeft = scroller.scrollLeft;
-        });
-        scroller.addEventListener('mouseleave', () => { isDown = false; });
-        scroller.addEventListener('mouseup', () => { isDown = false; });
-        scroller.addEventListener('mousemove', (e) => {
-            if (!isDown) return;
-            e.preventDefault();
-            const x = e.pageX - scroller.offsetLeft;
-            const walk = (x - startX) * 1.5;
-            scroller.scrollLeft = scrollLeft - walk;
+        // ── PLACE VALUE TOGGLE ──
+        pvToggle.addEventListener('change', () => {
+            placeValueMode = pvToggle.checked;
+            renderBlocks();
         });
 
-        // --- WORKSPACE TOUCH PAN (axis-locked) ---
-        // Horizontal drags anywhere on the workspace pan the number-line scroller.
-        // Vertical drags fall through to natural page scroll (needed for landscape).
-        const workspace = document.querySelector('.workspace');
-        let wsTouchStartX = null;
-        let wsTouchStartY = null;
-        let wsScrollLeft = null;
-        let wsAxisLocked = null; // 'x' | 'y' | null
-
-        workspace.addEventListener('touchstart', (e) => {
-            if (e.target.closest('.cube, .ten-bar, .action-tray, input')) return;
-            wsTouchStartX = e.touches[0].clientX;
-            wsTouchStartY = e.touches[0].clientY;
-            wsScrollLeft = scroller.scrollLeft;
-            wsAxisLocked = null;
-        }, { passive: true });
-
-        workspace.addEventListener('touchmove', (e) => {
-            if (wsTouchStartX === null) return;
-            const dx = e.touches[0].clientX - wsTouchStartX;
-            const dy = e.touches[0].clientY - wsTouchStartY;
-            if (wsAxisLocked === null) {
-                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5) {
-                    wsAxisLocked = 'x';
-                } else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 5) {
-                    wsAxisLocked = 'y';
-                }
-            }
-            if (wsAxisLocked === 'x') {
-                e.preventDefault();
-                scroller.scrollLeft = wsScrollLeft - dx;
-            }
-            // wsAxisLocked === 'y': let default page vertical scroll happen
-        }, { passive: false });
-
-        workspace.addEventListener('touchend', () => {
-            wsTouchStartX = null;
-            wsTouchStartY = null;
-            wsScrollLeft = null;
-            wsAxisLocked = null;
-        });
-
+        // ── RUNNING TOTAL ──
         function updateRunningTotal() {
-            const totalDisplay = document.getElementById('boardTotal');
-            const newTotal = (totalTens * 10) + totalOnes;
-            if (parseInt(totalDisplay.innerText) !== newTotal) {
-                totalDisplay.innerText = newTotal;
+            if (parseInt(totalDisplay.innerText) !== quantity) {
+                totalDisplay.innerText = quantity;
                 totalDisplay.classList.remove('anim-total-pop');
-                void totalDisplay.offsetWidth;
+                void totalDisplay.offsetWidth; // force reflow
                 totalDisplay.classList.add('anim-total-pop');
             }
         }
 
+        // ── TRACK VISIBILITY ──
+        // Shows one extra decade beyond the built quantity so there's always
+        // blank track ahead of the bead.
+        function updateTrackVisibility() {
+            let visibleMax = Math.ceil(quantity / 10) * 10 + 10;
+            if (visibleMax < 20) visibleMax = 20;
+            if (visibleMax > MAX_CAPACITY) visibleMax = MAX_CAPACITY;
+            for (let i = 1; i <= MAX_CAPACITY; i++) {
+                const slot = document.getElementById(`slot-${i}`);
+                const top  = nlTop.children[i - 1];
+                const bot  = nlBot.children[i - 1];
+                slot.classList.remove('last-visible');
+                if (i <= visibleMax) {
+                    slot.style.display = 'flex';
+                    top.style.display  = 'block';
+                    bot.style.display  = 'block';
+                    if (i === visibleMax) slot.classList.add('last-visible');
+                } else {
+                    slot.style.display = 'none';
+                    top.style.display  = 'none';
+                    bot.style.display  = 'none';
+                }
+            }
+        }
+
+        // ── SLOT METRICS ──
+        // Always derived from the first slot so they honour the current zoom.
+        function getSlotMetrics() {
+            const s = document.getElementById('slot-1');
+            return s ? { w: s.offsetWidth, pad: s.offsetLeft } : { w: 64, pad: 6 };
+        }
+
+        // ── POSITION BEAD ──
+        function positionBead() {
+            if (!bead) return;
+            const { w, pad } = getSlotMetrics();
+            bead.style.left = (quantity * w + pad) + 'px';
+        }
+
+        // ── RENDER BLOCKS ──
+        // Removes old cubes/ten-bars, redraws according to quantity + PV mode,
+        // then repositions the bead.
+        function renderBlocks() {
+            nlTray.querySelectorAll('.cube, .ten-bar').forEach(el => el.remove());
+
+            const { w: slotW, pad: trayPad } = getSlotMetrics();
+
+            if (placeValueMode) {
+                const tens = Math.floor(quantity / 10);
+                const ones = quantity % 10;
+                let cur = 1;
+
+                for (let t = 0; t < tens; t++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'ten-bar';
+                    // Position using measured metrics so zoom changes are instant
+                    bar.style.left = (trayPad + (cur - 1) * slotW) + 'px';
+                    for (let j = 0; j < 10; j++) {
+                        const seg = document.createElement('div');
+                        seg.className = 'ten-segment';
+                        bar.appendChild(seg);
+                    }
+                    nlTray.appendChild(bar);
+                    cur += 10;
+                }
+                for (let o = 0; o < ones; o++) {
+                    const cube = document.createElement('div');
+                    cube.className = 'cube';
+                    const slot = document.getElementById(`slot-${cur}`);
+                    if (slot) slot.appendChild(cube);
+                    cur++;
+                }
+            } else {
+                // PV off: all raw red unit cubes
+                for (let o = 0; o < quantity; o++) {
+                    const cube = document.createElement('div');
+                    cube.className = 'cube';
+                    const slot = document.getElementById(`slot-${o + 1}`);
+                    if (slot) slot.appendChild(cube);
+                }
+            }
+
+            positionBead();
+            updateTrackVisibility();
+            updateRunningTotal();
+        }
+
+        // ── ENSURE BEAD VISIBLE ──
+        // Scrolls the container so the bead stays within the visible window.
+        function ensureBeadVisible() {
+            if (!bead) return;
+            const br = bead.getBoundingClientRect();
+            const sr = scroller.getBoundingClientRect();
+            const margin = 72;
+            if (br.right > sr.right - margin) {
+                scroller.scrollLeft += br.right - (sr.right - margin);
+            } else if (br.left < sr.left + margin) {
+                scroller.scrollLeft -= (sr.left + margin) - br.left;
+            }
+        }
+
+        // ── INIT BOARD ──
         function initBoard() {
             nlTop.innerHTML = '';
             nlTray.innerHTML = '';
             nlBot.innerHTML = '';
             for (let i = 1; i <= MAX_CAPACITY; i++) {
-                const decadeIndex = Math.floor((i - 1) / 10);
-                const isAnchor = i % 10 === 0;
-                const themeClass = decadeIndex % 2 === 0 ? 'bg-light' : 'bg-dark';
+                const decadeIdx = Math.floor((i - 1) / 10);
+                const isAnchor  = i % 10 === 0;
+                const theme     = decadeIdx % 2 === 0 ? 'bg-light' : 'bg-dark';
+
                 const tLbl = document.createElement('div');
-                tLbl.className = `number-label ${isAnchor ? 'anchor' : ''} ${themeClass}`;
+                tLbl.className = `number-label ${isAnchor ? 'anchor' : ''} ${theme}`;
                 tLbl.textContent = i;
                 nlTop.appendChild(tLbl);
+
                 const slot = document.createElement('div');
-                slot.className = `slot ${themeClass}`;
+                slot.className = `slot ${theme}`;
                 slot.id = `slot-${i}`;
                 nlTray.appendChild(slot);
+
                 const bLbl = document.createElement('div');
-                bLbl.className = `number-label bottom ${themeClass}`;
+                bLbl.className = `number-label bottom ${theme}`;
                 let botNum = i % 10;
                 if (botNum === 0) botNum = 10;
                 bLbl.textContent = botNum;
@@ -432,138 +618,127 @@
             }
         }
 
-        function updateTrackVisibility() {
-            const currentVolume = totalTens * 10 + totalOnes;
-            let visibleMax = Math.ceil(currentVolume / 10) * 10 + 10;
-            if (visibleMax < 20) visibleMax = 20;
-            for (let i = 1; i <= MAX_CAPACITY; i++) {
-                const slot = document.getElementById(`slot-${i}`);
-                const top = nlTop.children[i-1];
-                const bot = nlBot.children[i-1];
-                slot.classList.remove('last-visible');
-                if (i <= visibleMax) {
-                    slot.style.display = 'flex';
-                    top.style.display = 'block';
-                    bot.style.display = 'block';
-                    if (i === visibleMax) slot.classList.add('last-visible');
-                } else {
-                    slot.style.display = 'none';
-                    top.style.display = 'none';
-                    bot.style.display = 'none';
-                }
+        // ── MOUSE PAN (scroller) ──
+        let isPanning = false, panStartX, panScrollLeft;
+
+        scroller.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.pull-bead')) return;
+            isPanning = true;
+            panStartX    = e.pageX - scroller.offsetLeft;
+            panScrollLeft = scroller.scrollLeft;
+        });
+        scroller.addEventListener('mouseleave', () => { isPanning = false; });
+        scroller.addEventListener('mouseup',    () => { isPanning = false; });
+        scroller.addEventListener('mousemove',  (e) => {
+            if (!isPanning) return;
+            e.preventDefault();
+            const x = e.pageX - scroller.offsetLeft;
+            scroller.scrollLeft = panScrollLeft - (x - panStartX) * 1.5;
+        });
+
+        // ── WORKSPACE TOUCH PAN (axis-locked) ──
+        // Horizontal swipes anywhere on the workspace pan the scroller.
+        // Vertical swipes fall through (body overflow is hidden, so they're no-ops,
+        // but the handler stays for forward-compat if the layout ever needs body scroll).
+        const workspace = document.querySelector('.workspace');
+        let wsTouchStartX = null, wsTouchStartY = null,
+            wsScrollLeft  = null, wsAxisLocked   = null;
+
+        workspace.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.pull-bead, input')) return;
+            wsTouchStartX = e.touches[0].clientX;
+            wsTouchStartY = e.touches[0].clientY;
+            wsScrollLeft  = scroller.scrollLeft;
+            wsAxisLocked  = null;
+        }, { passive: true });
+
+        workspace.addEventListener('touchmove', (e) => {
+            if (wsTouchStartX === null) return;
+            const dx = e.touches[0].clientX - wsTouchStartX;
+            const dy = e.touches[0].clientY - wsTouchStartY;
+            if (wsAxisLocked === null) {
+                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5) wsAxisLocked = 'x';
+                else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 5) wsAxisLocked = 'y';
+            }
+            if (wsAxisLocked === 'x') {
+                e.preventDefault();
+                scroller.scrollLeft = wsScrollLeft - dx;
+            }
+        }, { passive: false });
+
+        workspace.addEventListener('touchend', () => {
+            wsTouchStartX = wsTouchStartY = wsScrollLeft = wsAxisLocked = null;
+        });
+
+        // ── BEAD DRAG ──
+        let beadDragging = false;
+        let beadStartClientX = 0;
+        let beadStartQuantity = 0;
+
+        function startBeadDrag(clientX) {
+            beadDragging = true;
+            beadStartClientX  = clientX;
+            beadStartQuantity = quantity;
+            bead.classList.add('dragging');
+        }
+
+        function updateBeadDrag(clientX) {
+            if (!beadDragging) return;
+            const { w: slotW } = getSlotMetrics();
+            const delta = Math.round((clientX - beadStartClientX) / slotW);
+            const newQ  = Math.max(0, Math.min(MAX_CAPACITY, beadStartQuantity + delta));
+            if (newQ !== quantity) {
+                quantity = newQ;
+                renderBlocks();
+                ensureBeadVisible();
             }
         }
 
-        function renderBlocks(animateLast = false) {
-            nlTray.querySelectorAll('.cube, .ten-bar').forEach(el => el.remove());
-            let currentSlot = 1;
-
-            for (let t = 0; t < totalTens; t++) {
-                const tenBar = document.createElement('div');
-                tenBar.className = 'ten-bar';
-                tenBar.draggable = true;
-                tenBar.style.left = `calc(${currentSlot - 1} * var(--slot-w) + var(--tray-pad))`;
-                for (let j = 0; j < 10; j++) {
-                    const seg = document.createElement('div');
-                    seg.className = 'ten-segment';
-                    tenBar.appendChild(seg);
-                }
-                tenBar.addEventListener('click', () => {
-                    totalTens--;
-                    totalOnes += 10;
-                    renderBlocks();
-                });
-                tenBar.addEventListener('dragstart', (e) => {
-                    e.dataTransfer.setData('source', 'line');
-                    e.dataTransfer.setData('type', 'ten-bar');
-                });
-                nlTray.appendChild(tenBar);
-                currentSlot += 10;
-            }
-
-            for (let o = 0; o < totalOnes; o++) {
-                const cube = document.createElement('div');
-                cube.className = 'cube';
-                cube.draggable = true;
-                const targetSlot = document.getElementById(`slot-${currentSlot}`);
-                if (targetSlot) {
-                    targetSlot.appendChild(cube);
-                    if (animateLast && o === totalOnes - 1) cube.classList.add('anim-drop');
-                }
-                cube.addEventListener('click', () => {
-                    if (totalOnes >= 10) {
-                        totalOnes -= 10;
-                        totalTens++;
-                        renderBlocks();
-                        const bars = nlTray.querySelectorAll('.ten-bar');
-                        if (bars.length > 0) bars[bars.length - 1].classList.add('anim-snap');
-                    } else {
-                        cube.style.animation = 'shatterShake 0.4s';
-                        setTimeout(() => cube.style.animation = '', 400);
-                    }
-                });
-                cube.addEventListener('dragstart', (e) => {
-                    e.dataTransfer.setData('source', 'line');
-                    e.dataTransfer.setData('type', 'cube');
-                });
-                currentSlot++;
-            }
-            updateTrackVisibility();
-            updateRunningTotal();
+        function endBeadDrag() {
+            if (!beadDragging) return;
+            beadDragging = false;
+            if (bead) bead.classList.remove('dragging');
         }
 
-        document.getElementById('fpCubeSrc').addEventListener('dragstart', e => {
-            e.dataTransfer.setData('source', 'bank');
-            e.dataTransfer.setData('type', 'cube');
-        });
-        document.getElementById('fpTenSrc').addEventListener('dragstart', e => {
-            e.dataTransfer.setData('source', 'bank');
-            e.dataTransfer.setData('type', 'ten-bar');
-        });
-
-        nlTray.addEventListener('dragover', e => {
+        // Document-level listeners so the drag continues even if the pointer
+        // leaves the bead element.
+        document.addEventListener('mousemove',   (e) => updateBeadDrag(e.clientX));
+        document.addEventListener('mouseup',     endBeadDrag);
+        document.addEventListener('touchmove',   (e) => {
+            if (!beadDragging) return;
             e.preventDefault();
-            nlTray.classList.add('drag-over');
-        });
-        nlTray.addEventListener('dragleave', () => nlTray.classList.remove('drag-over'));
+            updateBeadDrag(e.touches[0].clientX);
+        }, { passive: false });
+        document.addEventListener('touchend',    endBeadDrag);
+        document.addEventListener('touchcancel', endBeadDrag);
 
-        nlTray.addEventListener('drop', e => {
-            e.preventDefault();
-            nlTray.classList.remove('drag-over');
-            const source = e.dataTransfer.getData('source');
-            const type = e.dataTransfer.getData('type');
-            if (source === 'bank') {
-                const currentVolume = (totalTens * 10) + totalOnes;
-                if (type === 'cube' && currentVolume < MAX_CAPACITY) {
-                    totalOnes++; renderBlocks(true);
-                    if (totalOnes === 10) setTimeout(() => {
-                        totalOnes -= 10; totalTens++; renderBlocks();
-                        const bars = nlTray.querySelectorAll('.ten-bar');
-                        if (bars.length > 0) bars[bars.length - 1].classList.add('anim-snap');
-                    }, 400);
-                } else if (type === 'ten-bar' && currentVolume <= MAX_CAPACITY - 10) {
-                    totalTens++; renderBlocks(true);
-                }
-            }
-        });
-
-        document.getElementById('fpCubeDispenser').addEventListener('click', () => {
-            const currentVolume = (totalTens * 10) + totalOnes;
-            if (currentVolume < MAX_CAPACITY) {
-                totalOnes++; renderBlocks(true);
-                if (totalOnes === 10) setTimeout(() => {
-                    totalOnes -= 10; totalTens++; renderBlocks();
-                    const bars = nlTray.querySelectorAll('.ten-bar');
-                    if (bars.length > 0) bars[bars.length - 1].classList.add('anim-snap');
-                }, 400);
-            }
-        });
-        document.getElementById('fpTenDispenser').addEventListener('click', () => {
-            const currentVolume = (totalTens * 10) + totalOnes;
-            if (currentVolume <= MAX_CAPACITY - 10) { totalTens++; renderBlocks(true); }
-        });
-
+        // ── BOOTSTRAP ──
         initBoard();
+
+        // Build the pull bead and attach it to the tray.
+        // Done here (after initBoard) so querySelectorAll('.cube,.ten-bar') in
+        // renderBlocks never accidentally removes it.
+        bead = document.createElement('div');
+        bead.className = 'pull-bead';
+        bead.setAttribute('aria-label', 'Drag right to add units, drag left to remove');
+        const beadGrip = document.createElement('div');
+        beadGrip.className = 'pull-bead-grip';
+        bead.appendChild(beadGrip);
+        nlTray.appendChild(bead);
+
+        // Attach bead-specific pointer listeners
+        bead.addEventListener('mousedown', (e) => {
+            startBeadDrag(e.clientX);
+            e.preventDefault(); // suppress text selection
+        });
+        bead.addEventListener('touchstart', (e) => {
+            startBeadDrag(e.touches[0].clientX);
+            e.preventDefault();    // suppress scroll & selection
+            e.stopPropagation();   // don't let workspace pan handler fire
+        }, { passive: false });
+
+        // Initial render
+        renderBlocks();
     </script>
 </body>
 </html>
