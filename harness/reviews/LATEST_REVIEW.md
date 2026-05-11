@@ -6,74 +6,50 @@ Must Fix:
 - None
 
 Should Fix Soon:
-- No reset button in the simplified Number Line; first-time users have no way to clear the tray without refreshing the page.
-- The zoom slider has no label or tooltip; its purpose is not immediately obvious.
-- No ARIA roles, keyboard navigation, or screen-reader labels in either app. Accessibility is entirely absent.
+- No reset button; users must drag the bead all the way back to 0 to clear. A reset affordance (button or double-tap bead) would improve UX.
+- The zoom slider has no label or tooltip; its purpose is not obvious to new users.
+- No ARIA roles, keyboard navigation, or screen-reader labels on the track or bead (bead has aria-label only).
+- Ten-bar `::before` and cube `::after` pseudo-elements use `display: flex` on absolutely-positioned children — works in all modern browsers but consider wrapping in a `<span>` if compat becomes an issue.
 
 Notes:
-- Files changed: apps/number-line/index.html (mobile landscape scroll + portrait pan area fix), harness/reviews/LATEST_REVIEW.md (updated)
+- Files changed: apps/number-line/index.html (full rebuild as Line Builder foundation), harness/reviews/LATEST_REVIEW.md (updated)
 
-- Root cause of landscape vertical scroll lock:
-  - `body` had `height: 100dvh; overflow: hidden` which hard-locked the viewport to exactly one screen height.
-  - In landscape, the header (80 px) + workspace content + footer exceeded the available short viewport height, but the overflow was hidden rather than scrollable.
-  - The user had no way to scroll the page to reach the number line.
+- What was removed:
+  - Supply tray (action-tray, dispensers, preview-cube, preview-ten, bank-item) — gone from HTML and CSS.
+  - State variables `totalTens` / `totalOnes` replaced by single `quantity` integer.
+  - All bank/dispenser click handlers and HTML5 drag-and-drop (dragstart / dragover / drop) listeners.
+  - Tap-to-fuse (10 ones → ten-bar) and tap-to-break (ten-bar → 10 ones) click interactions.
+  - `dashboard` div and its associated styles.
+  - Body vertical scroll (`min-height: 100dvh; overflow-y: auto`) replaced by `height: 100dvh; overflow: hidden` — track is now flex:1 and fills viewport instead.
 
-- Root cause of limited portrait pan area:
-  - `touch-action: pan-x` was set only on `.tray-scroller` and its children (`.tray-wrapper`, `.tray`, `.number-line-top`, `.number-line-bottom`, `.slot`).
-  - Touches starting on the `.workspace` background (above or around the scroller) were not intercepted; the browser fell back to default (no horizontal pan, no vertical page scroll either because overflow was hidden on body).
-  - Pan only worked when the initial touch landed directly on the track strip.
+- Pull bead behavior:
+  - A 40 px chrome sphere (`.pull-bead`) lives inside `.tray` as an absolutely-positioned child.
+  - Position: `left = quantity × slotW + trayPad` (derived from `slot-1.offsetWidth` and `slot-1.offsetLeft` so it is zoom-aware).
+  - On mousedown / touchstart the bead enters dragging state.
+  - Document-level mousemove / touchmove compute `delta = Math.round(dx / slotW)` from the drag-start clientX, clamp to [0, 150], set `quantity`, call `renderBlocks()` and `ensureBeadVisible()`.
+  - `ensureBeadVisible()` uses `getBoundingClientRect()` to auto-scroll the container within 72 px of the scroller's visible edge.
+  - Mouse pan of the scroller (click-drag on empty track) is preserved; explicitly skips the bead target.
+  - Workspace axis-locked touch-pan is preserved and also skips the bead target.
 
-- How fixed:
-  - CSS: Changed `body` from `height: 100dvh; overflow: hidden` to `min-height: 100dvh; overflow-y: auto; touch-action: pan-y`.
-    - `min-height` lets the body grow beyond the viewport in landscape so the page becomes vertically scrollable.
-    - `overflow-y: auto` enables native vertical page scroll when content exceeds viewport height.
-    - `touch-action: pan-y` explicitly declares that vertical page scrolling is allowed (overrides any implicit restriction).
-    - Desktop is unaffected: content fits within the viewport height, so body stays at exactly 100dvh and the workspace still vertically centers its children via `flex: 1; justify-content: center`.
-  - CSS: Added `padding-bottom: max(24px, env(safe-area-inset-bottom))` to `footer` so the track is not obscured by the iOS home indicator / browser chrome in landscape.
-  - JS: Added axis-locked workspace touch-pan handler (`touchstart`/`touchmove`/`touchend` on `.workspace`).
-    - On `touchstart` (excluding `.cube`, `.ten-bar`, `.action-tray`, `input` targets): records start position and `scroller.scrollLeft`.
-    - On `touchmove`: determines dominant axis after 5 px of movement.
-      - Horizontal axis locked → calls `e.preventDefault()` and sets `scroller.scrollLeft` directly (pans the number line).
-      - Vertical axis locked → does nothing; native page vertical scroll proceeds.
-    - Registered with `{ passive: false }` on `touchmove` so `preventDefault()` is legal.
-    - This extends horizontal panning to the full workspace area, not just the exact track strip.
+- Place Value toggle behavior:
+  - Apple-style 48 × 28 px pill toggle in the header, labelled "Place Value".
+  - OFF (default): all `quantity` units rendered as red `.cube` elements in their respective `.slot` — raw unit display.
+  - ON: `Math.floor(quantity / 10)` blue `.ten-bar` elements plus `quantity % 10` red `.cube` elements — auto-fused display.
+  - Toggle re-renders synchronously on `change`; replaces tap-to-fuse / tap-to-break entirely.
 
-- What was preserved:
-  - Red ones (#DC143C), blue tens (#4169E1), inventory tray, large running total display.
-  - Auto-bundle (10 ones → ten-bar) and break-apart (click ten-bar) interactions.
-  - Mouse-based click-drag pan (unchanged; still works on desktop).
-  - Zoom slider (0.3-1.2x) and all dynamic scaling.
-  - Full brand design language: glass header, Math Things logo, Lexend font, footer bead.
-  - Desktop layout remains polished and centered (min-height + flex: 1 preserve centering).
-  - No algorithm/procedure tabs reintroduced.
+- Mobile behavior:
+  - `body { height: 100dvh; overflow: hidden }` + `flex: 1` on `.workspace` and `.tray-scroller` — track fills remaining viewport; never below the fold.
+  - `@media (max-height: 500px)` compact mode: header 48 px, total 3 rem, workspace padding 6 px, "Place Value" text hidden (pill visible).
+  - Horizontal track pan via `touch-action: pan-x` on scroller + workspace axis-locked handler.
+  - Bead touchstart is `{ passive: false }` + `preventDefault()` + `stopPropagation()`.
+  - `env(safe-area-inset-bottom)` on `.tray-scroller` padding-bottom for iOS home-indicator clearance.
 
-- Remaining mobile limitations:
-  - HTML Drag-and-Drop API (dragstart/drop) does not fire on touch; dragging a piece from the bank tray to the track via touch does not work. Clicking the dispenser buttons to add pieces works on mobile. Implementing native touch-drag-to-drop is a future enhancement.
-  - Touching a block and swiping will pan horizontally (intended), but the block click (break-apart/bundle) will not fire if the touch moves significantly — this is correct native browser behaviour for distinguishing tap vs. scroll.
-  - On some Android browsers, `env(safe-area-inset-bottom)` may not be respected unless the page declares `viewport-fit=cover` in the meta viewport tag (not added here to avoid other layout side effects).
+- What remains placeholder / not yet implemented:
+  - Grid mode (pull quantity into a flat array) — next Dimensional Builder mode, not yet built.
+  - Keyboard stepping of the bead (ArrowLeft / ArrowRight).
+  - Undo / step-back affordance.
 
-- What moved into Addition/Subtraction Machine (apps/addition-subtraction-machine/index.html):
-  - The complete prior two-tab app was copied verbatim (title updated to "Addition/Subtraction Machine | Math Things.")
-  - Tab 1 (free-play icon): same free-play bank + number line
-  - Tab 2 (+/- icon): equation bar (opInputA, opInputB, op toggle, refresh), guided bank (opGuidedBank with ones/tens dispensers, empty/staged/removed preview blocks), algorithm sidebar (carry row, two addend rows, tens/ones digit boxes, operator, rule line, result row), all op-mode JS (buildOperation, updateGuidedBank, checkOpAddBundling, flyBlocks, triggerAutoZoom, animateZoom)
-  - All borrowing/carrying visuals: borrow-cross, borrow-mini, anim-borrow-cue, anim-pulse-link, text-pulse-link, emptyTargetPulseOnes/Tens animations
-  - Mode-switching event listeners on both nav tab buttons
-
-- What remains in Number Line (apps/number-line/index.html):
-  - Red unit cubes (--ones #DC143C) dispensed by click or drag from the 1s bank tray
-  - Blue ten-bars (--tens #4169E1) dispensed by click or drag from the 10s bank tray
-  - Auto-bundle: dropping/clicking to 10 ones automatically composes them into a ten-bar (magicSnap animation)
-  - Break-apart: clicking a ten-bar on the track breaks it back into 10 individual cubes
-  - Scrollable number line with alternating light/dark decade bands, top number labels (1-150), bottom unit labels (1-10 per decade), bold decade anchors
-  - Large running total display (7rem, 900 weight) above the tray, animates on every change (totalPop)
-  - Zoom slider (0.3-1.2x) that rescales all blocks, slots, labels dynamically via CSS custom properties
-  - Click-drag pan on the tray scroller (desktop); native touch pan (mobile)
-  - Full brand design language: glass header, Math Things logo with chrome bead, Lexend font stack, --shadow-block token, footer bead
-
-- What was intentionally removed from Number Line (prior session):
-  - Nav tabs, equation bar, guided bank, algorithm sidebar, all op-mode state and functions
-
-- Risks/tradeoffs:
-  - Both files are single-file, self-contained, and GitHub Pages deployable with no build step.
-  - The simplified Number Line has no reset button; adding one is a recommended future should-fix.
-  - Drag-from-line behaviour (draggable=true) is preserved on desktop; touch drag-from-bank is not supported (pre-existing limitation).
+- Risks / tradeoffs:
+  - Document-level `touchmove` is `{ passive: false }` but calls `preventDefault()` only when `beadDragging` is true; other touches are unblocked immediately.
+  - `renderBlocks()` is O(quantity) DOM work on every drag tick; 150 elements per frame is fine at current scale.
+  - Single-file, zero-build, GitHub Pages deployable — no regressions on this constraint.
