@@ -1,6 +1,86 @@
 # Latest Review
 
-## Docs Update — 2026-05-11
+## Grid Mode Refactor — 2026-05-11
+
+Status: PASS
+
+### Must Fix
+- None
+
+### Should Fix Soon
+- Hundred-flat fusion not yet implemented. When x = 10 and y = 10 with Place Value on, each row independently shows a single blue ten-stick. No yellow hundred-flat forms. **Next specific milestone before Solid mode.**
+- No reset affordance. Users must drag both beads back to zero manually. A reset affordance (button or double-tap bead) would improve UX.
+- Keyboard stepping of the x-bead (ArrowLeft / ArrowRight) not yet implemented.
+- No zoom-to-fit for large grids on mobile. At x > ~8 or y > ~10 at default zoom, the grid requires panning/scrolling.
+
+### Notes
+
+**Files changed:**
+- `apps/number-line/index.html` — Grid mode refactored (x/y axes + unified array surface)
+- `harness/reviews/LATEST_REVIEW.md` — this file
+
+---
+
+**x-axis / y-axis model:**
+- Grid mode now grows from the same upper-left origin as Line mode.
+- The existing horizontal number line is the x-axis across the top (labels + tray with x-bead and blocks).
+- A new y-axis track runs top-to-bottom on the left side. It renders as a vertical counterpart to the number line: square slots labeled 1..rows, same background and border-radius styling as the x-axis tray.
+- In grid mode the tray-wrapper switches to `flex-direction: row`: y-axis area on the left, x-content area (nlTop + nlTray + arraySurface + nlBot) on the right.
+- `alignYAxis()` measures `nlTop.offsetHeight` and sets the y-axis-track's `margin-top` so that y-slot 1 aligns pixel-accurately with the x-axis tray row.
+
+**y-axis bead behavior:**
+- The y-bead is now attached to and positioned within `.y-axis-area` (left side), not the far-right column edge.
+- `positionYBead()` centers the bead horizontally on the y-axis area (`left = yAxisArea.offsetWidth / 2`) and places it at the bottom edge of the y-axis track (`top = yAxisTrack.offsetTop + yAxisTrack.offsetHeight`).
+- `updateYBeadDrag()` uses `getSlotMetrics().w` (the square slot side) as the snap unit instead of the old `nlTray.offsetHeight` fallback. This is more accurate and zoom-aware.
+- Dragging the y-bead down increases `rows`; dragging up decreases `rows` (minimum 1).
+- When `quantity = 0` or in Line mode, the y-bead is hidden.
+
+**Unified array rendering:**
+- Removed `createExtraRow()` and `renderExtraRowBlocks()` (old stacked-rails approach).
+- Added `renderArraySurface()`: renders rows 2..rows as `.array-row` divs inside a single `#arraySurface` element.
+- `.array-row` has no individual border-radius, background, or box-shadow — it is a flat row inside the unified surface.
+- `.array-surface` provides the unified outer shape: same background as the track, `border-radius: 0 0 16px 16px`, `border-top: none` so it joins flush with `#nlTray`.
+- `#nlTray` in grid mode has `border-radius: 16px 16px 0 0` and no bottom border (seamless joint with array surface).
+- Row seams are visible via `border-top: 1px solid rgba(0,0,0,0.08)` on each `.array-row`.
+- Column seams come from alternating `bg-light`/`bg-dark` slots as before.
+- When `rows = 1`, `arraySurface` is hidden (`display: none`) and `#nlTray` stands alone as a regular rounded pill.
+
+**Place Value behavior:**
+- PV off: raw red unit cubes fill each row of the array (same as x-axis row).
+- PV on: each row of the array shows blue ten-bars plus red leftover cubes, identical to the x-axis row.
+- Place Value toggle still works in both Line and Grid mode.
+- Hundred-flat fusion (x = 10, y = 10 with PV on → yellow flat) is **deferred** as the next milestone.
+
+**Record behavior:**
+- Line mode: shows `n` (unchanged).
+- Grid mode: shows `x × y = total` (e.g. `7 × 5 = 35`). When `quantity = 0`, shows `0`.
+- Updates live while dragging either bead.
+- Font size reduced to `2.8rem` in grid mode (unchanged from previous).
+
+**Mobile / desktop behavior:**
+- Pinch-to-zoom, Ctrl+wheel, and keyboard +/- zoom all still work.
+- Horizontal panning (mouse drag / single-finger swipe, axis-locked) still works.
+- `body.grid-mode .tray-scroller` has `overflow-y: auto` for vertical scroll when rows exceed the viewport.
+- Portrait and landscape remain usable; no automatic zoom-to-fit (deferred).
+
+**What was preserved from Line mode:**
+- Drag x-bead right/left creates/removes unit cubes; bead snaps per slot.
+- Place Value toggle (wordless pill + SVG icon) unchanged.
+- Live quantity numeral with pop animation.
+- `ensureBeadVisible()` auto-scroll.
+- `unitSnap` and `tenMerge` animations.
+- Single-file, zero-build, GitHub Pages deployable.
+
+**What remains before Solid mode:**
+1. Hundred-flat fusion across grid rows (10 × 10 → yellow flat) — **next milestone**.
+2. Reset affordance (button or double-tap bead).
+3. Keyboard stepping of x-bead (ArrowLeft / ArrowRight).
+4. Zoom-to-fit affordance for large grids on mobile.
+5. Full enameled cast-iron / brushed-metal material redesign.
+
+---
+
+## Previous Review — Docs Update — 2026-05-11
 
 Status: PASS (docs-only, no behavior changes)
 
