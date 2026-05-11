@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
-    <title>Line Builder | Math Things.</title>
+    <title>Dimensional Builder | Math Things.</title>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;800;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -428,12 +428,132 @@
             flex-shrink: 0;
         }
 
+        /* ── MODE TOGGLE ── */
+        .mode-toggle {
+            display: flex;
+            background: #E5E5EA;
+            border-radius: 9px;
+            padding: 2px;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+        .mode-btn {
+            width: 34px;
+            height: 30px;
+            border: none;
+            background: transparent;
+            border-radius: 7px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease, box-shadow 0.15s ease;
+            color: var(--text-gray);
+            padding: 0;
+        }
+        .mode-btn.active {
+            background: white;
+            color: var(--text-main);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06);
+        }
+        .mode-btn svg { display: block; }
+
+        /* ── EXTRA ROWS (Grid mode) ── */
+        .extra-row {
+            margin-top: 3px;  /* seam gap between rows */
+            flex-shrink: 0;
+        }
+
+        /* ── Y-BEAD ── */
+        .y-bead {
+            position: absolute;
+            width: var(--bead-size);
+            height: var(--bead-size);
+            border-radius: 50%;
+            /* left and top set by JS */
+            transform: translateY(-50%);
+            background:
+                radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.15) 50%, transparent 70%),
+                radial-gradient(circle at 68% 72%, rgba(0,0,0,0.1) 0%, transparent 50%),
+                linear-gradient(145deg, #f2f2f2 0%, #d8d8d8 30%, #b0b0b0 58%, #c8c8c8 80%, #e8e8e8 100%);
+            box-shadow:
+                inset 1px 1px 3px rgba(255,255,255,0.85),
+                inset -1px -1px 2px rgba(0,0,0,0.18),
+                0 3px 10px rgba(0,0,0,0.28),
+                0 1px 3px rgba(0,0,0,0.14);
+            cursor: grab;
+            z-index: 1001;
+            touch-action: none;
+            pointer-events: auto;
+            display: none; /* shown only in Grid mode by JS */
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s var(--spring), box-shadow 0.15s ease;
+        }
+        .y-bead:hover {
+            transform: translateY(-50%) scale(1.2);
+            box-shadow:
+                inset 1px 1px 3px rgba(255,255,255,0.85),
+                inset -1px -1px 2px rgba(0,0,0,0.18),
+                0 5px 16px rgba(0,0,0,0.32),
+                0 2px 5px rgba(0,0,0,0.16);
+        }
+        .y-bead.dragging {
+            cursor: grabbing;
+            transform: translateY(-50%) scale(1.25);
+            box-shadow:
+                inset 1px 1px 3px rgba(255,255,255,0.85),
+                inset -1px -1px 2px rgba(0,0,0,0.18),
+                0 6px 20px rgba(0,0,0,0.35),
+                0 2px 6px rgba(0,0,0,0.18);
+        }
+        /* Three-line horizontal grip indicator for the y-bead */
+        .y-bead-grip {
+            width: calc(8px * var(--zoom));
+            height: calc(1.5px * var(--zoom));
+            background: rgba(0,0,0,0.3);
+            border-radius: 1px;
+            position: relative;
+        }
+        .y-bead-grip::before,
+        .y-bead-grip::after {
+            content: '';
+            position: absolute;
+            width: calc(8px * var(--zoom));
+            height: calc(1.5px * var(--zoom));
+            background: rgba(0,0,0,0.3);
+            border-radius: 1px;
+            left: 0;
+        }
+        .y-bead-grip::before { top: calc(-4px * var(--zoom)); }
+        .y-bead-grip::after  { top: calc( 4px * var(--zoom)); }
+
+        /* ── GRID MODE BODY CLASS ── */
+        /* Allow vertical scrolling inside the scroller when rows overflow */
+        body.grid-mode .tray-scroller {
+            overflow-y: auto;
+            touch-action: pan-x pan-y;
+        }
+        body.grid-mode .tray-wrapper,
+        body.grid-mode .tray,
+        body.grid-mode .extra-row,
+        body.grid-mode .number-line-top,
+        body.grid-mode .number-line-bottom {
+            touch-action: pan-x pan-y;
+        }
+        /* Smaller record text to fit "x × y = total" */
+        body.grid-mode .board-total-display {
+            font-size: 2.8rem;
+            letter-spacing: -0.03em;
+        }
+
         /* ── COMPACT LANDSCAPE (short viewports, e.g. phone landscape) ── */
         @media (max-height: 500px) {
             header { height: 48px; padding: 0 16px; }
             .logo  { font-size: 1.1rem; }
             .board-total-display { font-size: 3rem; }
             .workspace { padding: 6px 0 0 0; gap: 6px; }
+            body.grid-mode .board-total-display { font-size: 2rem; }
         }
     </style>
 </head>
@@ -441,6 +561,32 @@
     <header>
         <div class="logo">Math Things<span class="logo-bead"></span></div>
         <div class="header-controls">
+            <!-- Wordless mode toggle: Line | Grid -->
+            <div class="mode-toggle" role="group" aria-label="Builder mode">
+                <button class="mode-btn active" id="modeLine"
+                        aria-label="Line mode" title="Line mode">
+                    <svg width="20" height="14" viewBox="0 0 20 14" fill="none"
+                         xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                        <line x1="1" y1="7" x2="19" y2="7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        <line x1="1" y1="4" x2="1" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        <line x1="19" y1="4" x2="19" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        <circle cx="13" cy="7" r="2.5" fill="currentColor"/>
+                    </svg>
+                </button>
+                <button class="mode-btn" id="modeGrid"
+                        aria-label="Grid mode" title="Grid mode">
+                    <svg width="20" height="16" viewBox="0 0 20 16" fill="none"
+                         xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                        <rect x="1"  y="1" width="5" height="6" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        <rect x="8"  y="1" width="5" height="6" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        <rect x="14" y="1" width="5" height="6" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        <rect x="1"  y="9" width="5" height="6" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        <rect x="8"  y="9" width="5" height="6" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        <rect x="14" y="9" width="5" height="6" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    </svg>
+                </button>
+            </div>
+
             <div class="pv-toggle-wrap">
                 <!-- Wordless icon: small red unit cubes fusing into a blue ten-stick -->
                 <svg class="pv-icon" width="38" height="18" viewBox="0 0 38 18"
@@ -487,7 +633,12 @@
         // ── STATE ──
         let quantity = 0;
         let placeValueMode = false;
+        let mode = 'line'; // 'line' | 'grid'
+        let rows = 1;      // y-axis row count (Grid mode)
         const MAX_CAPACITY = 150;
+        const MAX_ROWS = 20;
+        // Fallback row height (px) used when nlTray.offsetHeight is unavailable (e.g. zero-quantity initial render)
+        const DEFAULT_ROW_HEIGHT = 80;
 
         // ── ELEMENTS ──
         const nlTop   = document.getElementById('nlTop');
@@ -499,6 +650,7 @@
 
         // Bead element — created in bootstrap after initBoard()
         let bead = null;
+        let yBead = null; // y-axis bead, created in bootstrap
 
         // ── ZOOM (app-owned; no visible slider) ──
         let zoom = 1;
@@ -533,8 +685,15 @@
 
         // ── RUNNING TOTAL ──
         function updateRunningTotal() {
-            if (parseInt(totalDisplay.innerText) !== quantity) {
-                totalDisplay.innerText = quantity;
+            let newText;
+            if (mode === 'grid') {
+                // In Grid mode: quantity = x (column count), rows = y; show x × y = total
+                newText = quantity === 0 ? '0' : `${quantity} × ${rows} = ${quantity * rows}`;
+            } else {
+                newText = String(quantity);
+            }
+            if (totalDisplay.innerText !== newText) {
+                totalDisplay.innerText = newText;
                 totalDisplay.classList.remove('anim-total-pop');
                 void totalDisplay.offsetWidth; // force reflow
                 totalDisplay.classList.add('anim-total-pop');
@@ -596,6 +755,9 @@
         function renderBlocks(animFlags) {
             nlTray.querySelectorAll('.cube, .ten-bar').forEach(el => el.remove());
 
+            // Remove extra rows from any previous Grid render
+            document.querySelectorAll('.extra-row').forEach(el => el.remove());
+
             const { w: slotW, pad: trayPad } = getSlotMetrics();
 
             if (placeValueMode) {
@@ -654,9 +816,116 @@
                 }
             }
 
+            // ── Grid mode: render additional rows below the main tray ──
+            if (mode === 'grid' && quantity > 0) {
+                const visMax = getVisibleMax();
+                const trayWrapper = document.querySelector('.tray-wrapper');
+                for (let r = 2; r <= rows; r++) {
+                    const rowEl = createExtraRow(visMax);
+                    trayWrapper.insertBefore(rowEl, nlBot);
+                    renderExtraRowBlocks(rowEl, slotW, trayPad);
+                }
+            }
+
             positionBead();
             updateTrackVisibility();
             updateRunningTotal();
+            positionYBead();
+        }
+
+        // ── VISIBLE MAX (shared helper) ──
+        function getVisibleMax() {
+            let v = Math.ceil(quantity / 10) * 10 + 10;
+            if (v < 20) v = 20;
+            if (v > MAX_CAPACITY) v = MAX_CAPACITY;
+            return v;
+        }
+
+        // ── CREATE EXTRA ROW ──
+        // Creates a tray-like row element with slots up to visMax.
+        // Does not contain slot IDs — renderExtraRowBlocks accesses them by index.
+        function createExtraRow(visMax) {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'tray extra-row';
+            for (let i = 1; i <= visMax; i++) {
+                const decadeIdx = Math.floor((i - 1) / 10);
+                const theme = decadeIdx % 2 === 0 ? 'bg-light' : 'bg-dark';
+                const slot = document.createElement('div');
+                slot.className = `slot ${theme}`;
+                if (i === visMax) slot.classList.add('last-visible');
+                rowEl.appendChild(slot);
+            }
+            return rowEl;
+        }
+
+        // ── RENDER EXTRA ROW BLOCKS ──
+        // Fills an extra row's slots with cubes/ten-bars matching the main tray.
+        function renderExtraRowBlocks(rowEl, slotW, trayPad) {
+            const slots = rowEl.querySelectorAll('.slot');
+            if (placeValueMode) {
+                const tens = Math.floor(quantity / 10);
+                const ones = quantity % 10;
+                let cur = 1; // 1-indexed slot position
+
+                for (let t = 0; t < tens; t++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'ten-bar';
+                    bar.style.left = (trayPad + (cur - 1) * slotW) + 'px';
+                    for (let j = 0; j < 10; j++) {
+                        const seg = document.createElement('div');
+                        seg.className = 'ten-segment';
+                        bar.appendChild(seg);
+                    }
+                    rowEl.appendChild(bar);
+                    cur += 10;
+                }
+                for (let o = 0; o < ones; o++) {
+                    const cube = document.createElement('div');
+                    cube.className = 'cube';
+                    const slot = slots[cur - 1]; // 0-indexed
+                    if (slot) slot.appendChild(cube);
+                    cur++;
+                }
+            } else {
+                for (let o = 0; o < quantity; o++) {
+                    const cube = document.createElement('div');
+                    cube.className = 'cube';
+                    if (slots[o]) slots[o].appendChild(cube);
+                }
+            }
+        }
+
+        // ── POSITION Y-BEAD ──
+        function positionYBead() {
+            if (!yBead) return;
+            if (mode !== 'grid' || quantity === 0) {
+                yBead.style.display = 'none';
+                return;
+            }
+            yBead.style.display = 'flex';
+
+            const { w: slotW, pad: trayPad } = getSlotMetrics();
+            // X: just to the right of the active column edge
+            yBead.style.left = (quantity * slotW + trayPad + 10) + 'px';
+
+            // Y: bottom edge of the last row (nlTray or last extra-row)
+            const trayWrapper = document.querySelector('.tray-wrapper');
+            const extraRows = trayWrapper.querySelectorAll('.extra-row');
+            const lastRow = extraRows.length > 0 ? extraRows[extraRows.length - 1] : nlTray;
+            // offsetTop is relative to trayWrapper (which is position:relative)
+            const yPos = lastRow.offsetTop + lastRow.offsetHeight;
+            yBead.style.top = yPos + 'px';
+        }
+
+        // ── SET MODE ──
+        function setMode(newMode) {
+            if (newMode === mode) return;
+            mode = newMode;
+            document.body.classList.toggle('grid-mode', mode === 'grid');
+            if (mode === 'grid' && rows < 1) rows = 1;
+            document.getElementById('modeLine').classList.toggle('active', mode === 'line');
+            document.getElementById('modeGrid').classList.toggle('active', mode === 'grid');
+            renderBlocks();
         }
 
         // ── ENSURE BEAD VISIBLE ──
@@ -706,7 +975,7 @@
         let isPanning = false, panStartX, panScrollLeft;
 
         scroller.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.pull-bead')) return;
+            if (e.target.closest('.pull-bead, .y-bead')) return;
             isPanning = true;
             panStartX    = e.pageX - scroller.offsetLeft;
             panScrollLeft = scroller.scrollLeft;
@@ -751,7 +1020,7 @@
                 return;
             }
             if (e.touches.length !== 1) return;
-            if (e.target.closest('.pull-bead, input')) return;
+            if (e.target.closest('.pull-bead, .y-bead, input')) return;
             wsTouchStartX = e.touches[0].clientX;
             wsTouchStartY = e.touches[0].clientY;
             wsScrollLeft  = scroller.scrollLeft;
@@ -799,6 +1068,11 @@
         let beadStartClientX = 0;
         let beadStartQuantity = 0;
 
+        // ── Y-BEAD DRAG ──
+        let yBeadDragging = false;
+        let yBeadStartClientY = 0;
+        let yBeadStartRows = 0;
+
         function startBeadDrag(clientX) {
             beadDragging = true;
             beadStartClientX  = clientX;
@@ -830,17 +1104,58 @@
             if (bead) bead.classList.remove('dragging');
         }
 
+        function startYBeadDrag(clientY) {
+            yBeadDragging = true;
+            yBeadStartClientY = clientY;
+            yBeadStartRows    = rows;
+            yBead.classList.add('dragging');
+        }
+
+        function updateYBeadDrag(clientY) {
+            if (!yBeadDragging) return;
+            // rowHeight: height of one row in screen pixels; fallback to DEFAULT_ROW_HEIGHT
+            const rowHeight = nlTray.offsetHeight || DEFAULT_ROW_HEIGHT;
+            const delta = Math.round((clientY - yBeadStartClientY) / rowHeight);
+            const newRows = Math.max(1, Math.min(MAX_ROWS, yBeadStartRows + delta));
+            if (newRows !== rows) {
+                rows = newRows;
+                renderBlocks();
+            }
+        }
+
+        function endYBeadDrag() {
+            if (!yBeadDragging) return;
+            yBeadDragging = false;
+            if (yBead) yBead.classList.remove('dragging');
+        }
+
         // Document-level listeners so the drag continues even if the pointer
         // leaves the bead element.
-        document.addEventListener('mousemove',   (e) => updateBeadDrag(e.clientX));
-        document.addEventListener('mouseup',     endBeadDrag);
-        document.addEventListener('touchmove',   (e) => {
-            if (!beadDragging) return;
-            e.preventDefault();
-            updateBeadDrag(e.touches[0].clientX);
+        document.addEventListener('mousemove', (e) => {
+            updateBeadDrag(e.clientX);
+            updateYBeadDrag(e.clientY);
+        });
+        document.addEventListener('mouseup', () => {
+            endBeadDrag();
+            endYBeadDrag();
+        });
+        document.addEventListener('touchmove', (e) => {
+            if (beadDragging) {
+                e.preventDefault();
+                updateBeadDrag(e.touches[0].clientX);
+            } else if (yBeadDragging) {
+                e.preventDefault();
+                updateYBeadDrag(e.touches[0].clientY);
+            }
         }, { passive: false });
-        document.addEventListener('touchend',    endBeadDrag);
-        document.addEventListener('touchcancel', endBeadDrag);
+        document.addEventListener('touchend', () => {
+            endBeadDrag();
+            endYBeadDrag();
+        });
+        document.addEventListener('touchcancel', () => {
+            endBeadDrag();
+            endYBeadDrag();
+        });
 
         // ── CTRL+WHEEL / TRACKPAD PINCH ZOOM (desktop) ──
         // Only intercept when Ctrl is held so normal page scrolling is untouched.
@@ -869,7 +1184,7 @@
         // ── BOOTSTRAP ──
         initBoard();
 
-        // Build the pull bead and attach it to the tray.
+        // Build the x pull bead and attach it to the tray.
         // Done here (after initBoard) so querySelectorAll('.cube,.ten-bar') in
         // renderBlocks never accidentally removes it.
         bead = document.createElement('div');
@@ -890,6 +1205,31 @@
             e.preventDefault();    // suppress scroll & selection
             e.stopPropagation();   // don't let workspace pan handler fire
         }, { passive: false });
+
+        // Build the y-bead and attach it to the tray-wrapper.
+        yBead = document.createElement('div');
+        yBead.className = 'y-bead';
+        yBead.setAttribute('aria-label', 'Drag down to add rows, drag up to remove rows');
+        const yBeadGrip = document.createElement('div');
+        yBeadGrip.className = 'y-bead-grip';
+        yBead.appendChild(yBeadGrip);
+        document.querySelector('.tray-wrapper').appendChild(yBead);
+
+        yBead.addEventListener('mousedown', (e) => {
+            if (mode !== 'grid') return;
+            startYBeadDrag(e.clientY);
+            e.preventDefault();
+        });
+        yBead.addEventListener('touchstart', (e) => {
+            if (mode !== 'grid') return;
+            startYBeadDrag(e.touches[0].clientY);
+            e.preventDefault();
+            e.stopPropagation();
+        }, { passive: false });
+
+        // Mode toggle listeners
+        document.getElementById('modeLine').addEventListener('click', () => setMode('line'));
+        document.getElementById('modeGrid').addEventListener('click', () => setMode('grid'));
 
         // Initial render
         renderBlocks();

@@ -7,59 +7,72 @@ Must Fix:
 
 Should Fix Soon:
 - No reset button; users must drag the bead all the way back to 0 to clear. A reset affordance (button or double-tap bead) would improve UX.
-- No ARIA roles or keyboard navigation on the track itself (bead has `aria-label`; input has `aria-label`; label has `title`).
+- No ARIA roles or keyboard navigation on the track itself (bead has `aria-label`; y-bead has `aria-label`; input has `aria-label`; label has `title`).
 - Ten-bar `::before` and cube `::after` pseudo-elements use `display: flex` on absolutely-positioned children — works in all modern browsers but consider wrapping in a `<span>` if compat becomes an issue.
+- Hundred-flat fusion across rows is not yet implemented. In Grid mode with PV on, each row independently shows tens + ones; no blue hundred-flat forms when 10 full rows of 10 exist. Document as a later milestone.
+- The y-bead row-height calculation uses `nlTray.offsetHeight` measured live, which is accurate but means the snap-to-row threshold depends on the current zoom level. If the user changes zoom during a y-drag (unlikely), the row count could jump. Acceptable for now; a rAF-gated or pre-capture approach can smooth this if needed.
+- Mobile portrait with many rows (> ~10 at default zoom): the tray-scroller gains a vertical scrollbar and the grid can be scrolled; this is functional but not polished. A future pass should add inertia scrolling feedback or a zoom-to-fit affordance.
 
 Notes:
-- Files changed: apps/number-line/index.html (removed zoom slider, added app-owned pinch/wheel/keyboard zoom), harness/reviews/LATEST_REVIEW.md (updated)
+- Files changed: apps/number-line/index.html (added Grid mode), harness/reviews/LATEST_REVIEW.md (updated)
 
-- Removed zoom UI:
-  - `.zoom-controls` div (magnifying-glass SVG + `<input type="range" id="zoomSlider">`) removed from the header entirely.
-  - `.zoom-controls` and `.zoom-slider` CSS rules replaced with a single comment.
-  - The `zoomSlider` const and its `input` event listener removed from JS.
-  - Header now contains only the logo and the Place Value pill toggle.
+- Title changed from "Line Builder" to "Dimensional Builder".
 
-- App-owned pinch implementation (mobile / tablet):
-  - `workspace.addEventListener('touchstart', …, { passive: false })` — when exactly two touches are active and `beadDragging` is false, pinch mode begins: stores `pinchStartDist` (Euclidean distance between the two pointers) and `pinchStartZoom`.
-  - `workspace.addEventListener('touchmove', …, { passive: false })` — while `pinchActive && e.touches.length === 2`, computes new distance, derives `newZoom = pinchStartZoom * (dist / pinchStartDist)`, passes the midpoint clientX as the focal point to `setZoom()`, then returns early so pan logic is skipped.
-  - `workspace.addEventListener('touchend', …)` — clears `pinchActive` when fewer than two touches remain; clears pan state when no touches remain.
-  - If `beadDragging` is true when a second finger lands, pinch is not activated (requirement: no accidental zoom during bead drag).
-  - Bead's existing `touchstart` calls `stopPropagation()`, so a single-finger bead drag cannot accidentally start pinch.
+- Mode control:
+  - A two-position segmented icon toggle was added to the left of the PV pill in the header.
+  - Line button: SVG of a horizontal line with end ticks and a small bead circle; `aria-label="Line mode"`.
+  - Grid button: SVG 3×2 grid of outlined rectangles; `aria-label="Grid mode"`.
+  - Clicking a button calls `setMode('line'|'grid')`, which toggles `body.grid-mode` and re-renders.
 
-- Desktop wheel/keyboard zoom behavior:
-  - `scroller.addEventListener('wheel', …, { passive: false })`: intercepts only when `e.ctrlKey` is true (Ctrl+wheel on Windows/Linux, trackpad-pinch on macOS — which browsers report as ctrlKey+wheel). Steps zoom by ±0.1 per wheel notch, with `focalClientX = e.clientX` for stable focal point. Non-Ctrl wheel events fall through normally for native scroll.
-  - `document.addEventListener('keydown', …)`: `+` or `=` zooms in; `-` or `_` zooms out. Focal point is the horizontal center of the scroller viewport. Skipped when an `<input>` is focused.
+- Grid/y-bead behavior:
+  - Grid mode renders the same blocks into rows 2..N as `.tray.extra-row` elements inserted before `nlBot`.
+  - Each extra row is a full flex tray (same CSS class as the main tray) with slot divs for cubes and absolute-positioned ten-bars, so column alignment is identical to row 1.
+  - The y-bead is an absolutely positioned `.y-bead` element inside `.tray-wrapper`; it appears at the right edge of the active column stack, centered on the bottom edge of the last row.
+  - Dragging the y-bead down increases `rows`; dragging up decreases `rows` (minimum 1 when x > 0).
+  - When x = 0, the y-bead is hidden and the grid is empty.
+  - `MAX_ROWS = 20`.
+  - Row seam: extra rows have `margin-top: 3px` which creates a visible horizontal gap, making each row countable.
+  - Column seam: alternating `bg-light`/`bg-dark` slot backgrounds carry into extra rows naturally.
 
-- Focal-point preservation (`setZoom(newZoom, focalClientX)`):
-  - Before applying the new zoom: captures `savedRelX = focalClientX − scroller.getBoundingClientRect().left` and `savedContentX = scroller.scrollLeft + savedRelX`.
-  - After `renderBlocks()` (which updates all pixel positions at the new `--zoom`): sets `scroller.scrollLeft = savedContentX * ratio − savedRelX`, where `ratio = newZoom / oldZoom`. This keeps the pinch/cursor focal point visually stable.
+- Record behavior:
+  - Line mode: record shows the quantity (e.g. `14`), same as before.
+  - Grid mode: record shows `x × y = total` (e.g. `7 × 5 = 35`) using the Unicode × character.
+  - If x = 0 in Grid mode, record shows `0`.
+  - Record updates live while dragging x or y bead.
+  - Font size reduced to `2.8rem` in Grid mode (`2rem` in compact landscape) to accommodate the longer string.
+
+- Place Value behavior in Grid mode:
+  - PV off: each row renders raw red unit cubes (same as Line mode row rendering).
+  - PV on: each row renders complete ten-sticks (blue) plus leftover ones (red), identical to the main tray.
+  - Hundred-flat fusion across rows is NOT implemented. When PV is on and x = 10 with y ≥ 10, individual rows show a single blue ten-stick; they do not fuse into a hundred-flat. **Should Fix Soon / later milestone.**
 
 - Mobile behavior:
-  - `<meta name="viewport" content="…user-scalable=no">` already prevents browser-native pinch zoom.
-  - Two-finger pinch on workspace zooms the line/workspace via JS.
-  - Single-finger swipe still pans horizontally (axis-locked handler preserved).
-  - Portrait and landscape layouts remain unchanged.
+  - Mobile portrait: `.tray-scroller` gains `overflow-y: auto` and `touch-action: pan-x pan-y` via `body.grid-mode` CSS; vertical scrolling works natively when rows exceed the viewport.
+  - Mobile landscape: same, with the compact-landscape header/font rules still active.
+  - Horizontal panning continues to work (axis-locked touch handler unchanged).
+  - Pinch-to-zoom continues to work; the two-finger pinch path ignores y-bead drag state.
+  - Limitation: if y > ~10 at default zoom on a phone portrait, the grid requires vertical scrolling to see all rows. No automatic zoom-to-fit; user can Ctrl+wheel or pinch to reduce zoom.
 
-- What was preserved:
-  - Drag bead right to create units; drag left to remove units.
+- What was preserved from Line mode:
+  - Drag x-bead right/left creates/removes unit cubes; bead snaps per slot.
   - Place Value toggle (wordless pill + SVG icon) unchanged.
-  - Place Value off: raw red unit cubes. Place Value on: blue ten-sticks with leftover red cubes.
+  - PV off: raw red unit cubes. PV on: blue ten-sticks with leftover red cubes.
   - Live quantity numeral with pop animation.
-  - Horizontal panning/scrolling on mobile.
-  - Mobile landscape compact layout.
+  - Gesture zoom: pinch on workspace, Ctrl+wheel on desktop, +/- keyboard.
+  - Horizontal panning: mouse drag on empty track; single-finger swipe (axis-locked).
   - `ensureBeadVisible()` auto-scroll behaviour.
-  - Mouse-pan on empty track.
-  - All zoom scaling via CSS custom property `--zoom`; internal `zoom` variable replaces slider value.
+  - `renderBlocks()` animation flags (newUnit snap, ten-bar merge) still fire for the main tray row in both modes.
   - Single-file, zero-build, GitHub Pages deployable.
 
-- What remains for later passes:
-  - Grid/Array mode — not yet built.
-  - Solid mode — not yet built.
-  - Enameled cast-iron / brushed-metal material redesign — deferred.
-  - Keyboard stepping of the bead (ArrowLeft / ArrowRight).
+- What remains before Solid mode:
+  - Solid/3D mode — not yet built.
+  - Hundred-flat fusion across rows — deferred.
+  - Enameled cast-iron / brushed-metal full material redesign — deferred.
+  - Keyboard stepping of the x-bead (ArrowLeft / ArrowRight).
   - Reset affordance (button or double-tap bead).
+  - Zoom-to-fit affordance for large grids on mobile.
 
-- Known limitations before Grid mode:
-  - `renderBlocks()` is O(quantity) DOM work on every pinch tick; smooth at typical quantities (≤ 50) but may stutter at 100–150 elements during fast pinch. A rAF-gated debounce can be added if needed.
+- Known limitations:
+  - `renderBlocks()` is O(quantity × rows) DOM work on every pinch tick or drag tick; smooth for typical values (x ≤ 50, y ≤ 10) but may stutter at maximums (x = 150, y = 20 = 3000 elements). A virtualised row approach can be added if needed.
   - `navigator.vibrate()` is wrapped in a try/catch and gated on reduced-motion; silently ignored on iOS.
-  - Ctrl+wheel step size is fixed at 0.1 per notch; some high-resolution trackpads may emit many small deltaY values in rapid succession, giving a fast zoom rate. A rAF debounce or deltaY accumulator can smooth this if needed.
+  - Ctrl+wheel step size is fixed at 0.1 per notch; fast trackpad wheels can zoom quickly (same as before).
