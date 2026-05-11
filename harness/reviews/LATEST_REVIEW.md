@@ -1,6 +1,29 @@
 # Latest Review
 
-Status: PASS
+## Docs Update — 2026-05-11
+
+Status: PASS (docs-only, no behavior changes)
+
+### Docs Created
+
+| File | Purpose |
+|---|---|
+| `docs/00_MATH_THINGS_DESIGN_DOCTRINE.md` | Master design doctrine: no words, teacher teaches, equation is the shadow, material identity overview, interaction rules. |
+| `docs/01_MATERIAL_SYSTEM.md` | Full material specification: enameled cast iron for math objects, brushed/machined metal for infrastructure. Color palette, states, slot backgrounds. |
+| `docs/02_DIMENSIONAL_BUILDER_DOCTRINE.md` | App-specific rules for Number-Line (Line/Grid), Array Builder, Array Builder v2, and the planned Solid mode. Dimensional progression table and remaining milestones. |
+| `docs/12_DO_NOT_VIOLATE.md` | Hard constraints: no words in UI, no behavior changes in docs tasks, no gamification, no external dependencies, no adaptive behavior, material system compliance, harness review requirement. |
+
+### How Future Agents Should Use These Docs
+
+1. **Start with `docs/12_DO_NOT_VIOLATE.md`** before making any change. Confirm the task does not conflict with any hard constraint.
+2. **Read `docs/00_MATH_THINGS_DESIGN_DOCTRINE.md`** to understand the philosophical intent of every design decision.
+3. **Consult `docs/01_MATERIAL_SYSTEM.md`** whenever adding or modifying any visual element to ensure it belongs to the correct material category.
+4. **Consult `docs/02_DIMENSIONAL_BUILDER_DOCTRINE.md`** for app-specific rules (bead behavior, record format, mode names, deferred milestones).
+5. **Update `harness/reviews/LATEST_REVIEW.md`** after any non-trivial change with a pass/fail, must-fix list, should-fix-soon list, and a summary of what changed.
+
+---
+
+## Previous Review
 
 Must Fix:
 - None
