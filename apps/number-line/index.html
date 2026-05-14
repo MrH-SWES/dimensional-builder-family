@@ -34,7 +34,8 @@
             --zoom: 1;
 
             /* Dynamic Scaling */
-            --slot-w: calc(64px * var(--zoom));
+            --cell-size: 64px;    /* canonical slot size; JS updates this on every zoom change */
+            --slot-w: var(--cell-size);
             --cube-base: calc(54px * var(--zoom));
             --depth: calc(12px * var(--zoom));
             --tray-pad: calc(6px * var(--zoom));
@@ -889,7 +890,9 @@
         let mode = 'line'; // 'line' | 'grid'
         let rows = 1;      // y-axis row count (Grid mode)
         const MAX_CAPACITY = 150;
-        const MAX_ROWS = 20;
+        const MAX_ROWS = 150;          // must match or approach MAX_CAPACITY for y-pull scaling tests
+        const BASE_CELL_SIZE = 64;     // canonical slot side length at zoom = 1
+        function getCellSize() { return BASE_CELL_SIZE * zoom; }
 
         // ── ELEMENTS ──
         const nlTop   = document.getElementById('nlTop');
@@ -925,6 +928,7 @@
             }
             zoom = newZoom;
             document.documentElement.style.setProperty('--zoom', zoom);
+            document.documentElement.style.setProperty('--cell-size', `${getCellSize()}px`);
             renderBlocks();
             // Shift scroll so the focal content position stays under the finger/cursor
             if (savedContentX !== undefined) {
@@ -990,10 +994,10 @@
         }
 
         // ── SLOT METRICS ──
-        // Always derived from the first slot so they honour the current zoom.
+        // Returns the canonical cell size (never DOM-rounded) and the tray's horizontal padding.
+        // getCellSize() is the single source of truth for all grid geometry.
         function getSlotMetrics() {
-            const s = document.getElementById('slot-1');
-            return s ? { w: s.offsetWidth, pad: s.offsetLeft } : { w: 64, pad: 6 };
+            return { w: getCellSize(), pad: 6 * zoom };
         }
 
         // ── POSITION BEAD ──
@@ -1362,13 +1366,15 @@
         }
 
         // ── MOUSE PAN (scroller) ──
-        let isPanning = false, panStartX, panScrollLeft;
+        let isPanning = false, panStartX, panStartY, panScrollLeft, panScrollTop;
 
         scroller.addEventListener('mousedown', (e) => {
             if (e.target.closest('.pull-bead, .y-bead')) return;
             isPanning = true;
-            panStartX    = e.pageX - scroller.offsetLeft;
+            panStartX     = e.pageX - scroller.offsetLeft;
+            panStartY     = e.pageY - scroller.offsetTop;
             panScrollLeft = scroller.scrollLeft;
+            panScrollTop  = scroller.scrollTop;
         });
         scroller.addEventListener('mouseleave', () => { isPanning = false; });
         scroller.addEventListener('mouseup',    () => { isPanning = false; });
@@ -1377,13 +1383,17 @@
             e.preventDefault();
             const x = e.pageX - scroller.offsetLeft;
             scroller.scrollLeft = panScrollLeft - (x - panStartX) * 1.5;
+            if (mode === 'grid') {
+                const y = e.pageY - scroller.offsetTop;
+                scroller.scrollTop = panScrollTop - (y - panStartY) * 1.5;
+            }
         });
 
         // ── WORKSPACE TOUCH PAN + PINCH-TO-ZOOM ──
         // One finger → horizontal pan.  Two fingers (no bead) → pinch zoom.
         const workspace = document.querySelector('.workspace');
         let wsTouchStartX = null, wsTouchStartY = null,
-            wsScrollLeft  = null, wsAxisLocked   = null;
+            wsScrollLeft  = null, wsScrollTop   = null, wsAxisLocked = null;
         let pinchActive = false, pinchStartDist = 0, pinchStartZoom = 1;
         let pinchRafId = null, pendingPinchZoom = null, pendingPinchMidX = null;
 
@@ -1414,6 +1424,7 @@
             wsTouchStartX = e.touches[0].clientX;
             wsTouchStartY = e.touches[0].clientY;
             wsScrollLeft  = scroller.scrollLeft;
+            wsScrollTop   = scroller.scrollTop;
             wsAxisLocked  = null;
             pinchActive   = false;
         }, { passive: false });
@@ -1439,6 +1450,9 @@
             if (wsAxisLocked === 'x') {
                 e.preventDefault();
                 scroller.scrollLeft = wsScrollLeft - dx;
+            } else if (wsAxisLocked === 'y' && mode === 'grid') {
+                e.preventDefault();
+                scroller.scrollTop = wsScrollTop - dy;
             }
         }, { passive: false });
 
@@ -1449,7 +1463,7 @@
                 pendingPinchZoom = pendingPinchMidX = null;
             }
             if (e.touches.length === 0) {
-                wsTouchStartX = wsTouchStartY = wsScrollLeft = wsAxisLocked = null;
+                wsTouchStartX = wsTouchStartY = wsScrollLeft = wsScrollTop = wsAxisLocked = null;
             }
         });
 
@@ -1503,12 +1517,31 @@
 
         function updateYBeadDrag(clientY) {
             if (!yBeadDragging) return;
-            // y-slot height equals slot width (square slots, same --slot-w variable)
-            const { w: slotW } = getSlotMetrics();
-            const delta = Math.round((clientY - yBeadStartClientY) / slotW);
-            const newRows = Math.max(1, Math.min(MAX_ROWS, yBeadStartRows + delta));
-            if (newRows !== rows) {
-                rows = newRows;
+            const cellSize   = getCellSize();
+            const delta      = Math.round((clientY - yBeadStartClientY) / cellSize);
+            const targetRows = Math.max(1, Math.min(MAX_ROWS, yBeadStartRows + delta));
+
+            // Dynamic y-pull scaling: when the growing grid would push below the visible
+            // viewport, smoothly reduce zoom so the full array stays in view.
+            // This feels like the camera backing up to make room — no manual zoom needed.
+            let zoomChanged = false;
+            if (targetRows >= rows) {
+                const gridTop = nlTop.offsetHeight;          // px above the gridCanvas
+                const availH  = scroller.clientHeight - gridTop - 48; // 48 px bead margin
+                if (availH > 0 && targetRows * cellSize > availH) {
+                    const newZoom = Math.max(ZOOM_MIN, availH / (targetRows * BASE_CELL_SIZE));
+                    if (newZoom < zoom) {
+                        zoom = newZoom;
+                        document.documentElement.style.setProperty('--zoom', zoom);
+                        document.documentElement.style.setProperty('--cell-size', `${getCellSize()}px`);
+                        scroller.scrollTop = 0; // keep origin at top-left
+                        zoomChanged = true;
+                    }
+                }
+            }
+
+            if (targetRows !== rows || zoomChanged) {
+                rows = targetRows;
                 renderBlocks();
             }
         }
@@ -1573,6 +1606,10 @@
 
         // ── BOOTSTRAP ──
         initBoard();
+
+        // Set the canonical --cell-size CSS variable to match the initial zoom = 1.
+        // (Kept in sync by setZoom and the y-pull scaler thereafter.)
+        document.documentElement.style.setProperty('--cell-size', `${getCellSize()}px`);
 
         // Build the x pull bead and attach it to the tray.
         // Done here (after initBoard) so querySelectorAll('.cube,.ten-bar') in

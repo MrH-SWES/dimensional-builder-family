@@ -1,6 +1,6 @@
 # Latest Review
 
-## Grid Mode Geometry + Hundred-Flat Fusion — 2026-05-14
+## Fix Grid Panning, Canonical Cell Sizing, Dynamic Y-Pull Scaling — 2026-05-14
 
 Status: PENDING — awaiting human acceptance-test run
 
@@ -13,6 +13,103 @@ Status: PENDING — awaiting human acceptance-test run
 - No zoom-to-fit for large grids on mobile.
 
 ### Summary of Changes
+
+**1. Canonical cell size — `BASE_CELL_SIZE` / `getCellSize()` / `--cell-size`**
+
+Previous code used `s.offsetWidth` (a rounded integer) as the grid cell size.  Because
+CSS uses `calc(64px * var(--zoom))` (sub-pixel), mixing rounded JS values with
+fractional CSS values caused cells to drift and produced gaps inside hundred-flats and
+ten-sticks at non-integer zoom levels.
+
+Fix:
+- Added `const BASE_CELL_SIZE = 64` and `function getCellSize() { return BASE_CELL_SIZE * zoom; }`.
+- Added `--cell-size: 64px` to `:root`; changed `--slot-w: var(--cell-size)`.
+- Every zoom change (in `setZoom`, in the y-pull scaler) calls
+  `document.documentElement.style.setProperty('--cell-size', \`${getCellSize()}px\`)`.
+- `getSlotMetrics()` now returns `{ w: getCellSize(), pad: 6 * zoom }` — no DOM measurement.
+- All x/y positions, row heights, column widths, block sizes, and hundred-flat geometry
+  derive from the same `getCellSize()` value.  CSS `var(--slot-w)` tracks it exactly.
+
+**2. Increased MAX_ROWS**
+
+`MAX_ROWS` increased from 20 to 150 (matching `MAX_CAPACITY`) so dynamic y-pull
+scaling can be exercised before the ceiling is reached.
+
+**3. Mouse panning — two-axis in Grid mode**
+
+Previously only `panStartX` / `panScrollLeft` were stored; vertical panning was
+impossible with a mouse.
+
+Fix:
+- Added `panStartY` / `panScrollTop` to the `mousedown` capture.
+- In `mousemove`, when `mode === 'grid'`, `scroller.scrollTop` is updated alongside
+  `scroller.scrollLeft`.
+- Line mode preserves the original horizontal-only behavior.
+
+**4. Touch panning — vertical axis in Grid mode**
+
+The `touchmove` handler only branched on `wsAxisLocked === 'x'`; vertical finger
+swipes in Grid mode had no effect.
+
+Fix:
+- Added `wsScrollTop = scroller.scrollTop` to the `touchstart` capture.
+- Added an `else if (wsAxisLocked === 'y' && mode === 'grid')` branch that calls
+  `e.preventDefault()` and sets `scroller.scrollTop = wsScrollTop - dy`.
+- `wsScrollTop` is cleared alongside the other workspace touch state in `touchend`.
+- Line mode preserves the horizontal-only behavior; vertical swipes in Line mode
+  fall through without action (native scroll is impossible there anyway because
+  `.tray-scroller` has `overflow-y: hidden` in Line mode).
+
+**5. Dynamic y-pull scaling**
+
+Dragging the y-bead down past the bottom of the viewport previously felt "blocked"
+because the bead scrolled off screen and new rows could not be seen.
+
+Fix in `updateYBeadDrag`:
+- After computing `targetRows`, checks whether `targetRows * cellSize` exceeds
+  `scroller.clientHeight − nlTop.offsetHeight − 48`.
+- If it would overflow, computes the exact zoom needed to keep all rows visible:
+  `newZoom = max(ZOOM_MIN, availH / (targetRows * BASE_CELL_SIZE))`.
+- Applies the zoom directly (sets `--zoom` and `--cell-size` CSS variables), resets
+  `scroller.scrollTop = 0` to keep the origin at the top-left, and sets `zoomChanged = true`.
+- A single `renderBlocks()` call is made covering both the zoom change and any row-count
+  change.  No double rendering.
+- The effect feels like the camera backing up: the origin stays fixed, the grid scales
+  down uniformly, and the y-bead remains reachable at the bottom edge.
+- The zoom is only reduced during y-bead growth; shrinking rows or explicit zoom gestures
+  (pinch, Ctrl+wheel, keyboard) work independently.
+
+**What was preserved**
+
+- Line mode behavior: x-bead drag, PV toggle, animations, horizontal pan, pinch zoom
+  — all unchanged.
+- Grid place-value rendering: hundred-flats, vertical/horizontal ten-sticks, red unit
+  cubes — all unchanged.
+- No Solid mode added.
+- No visible instructional prose added.
+
+### Acceptance tests (self-review)
+
+| Test | Status |
+|---|---|
+| Line mode still works | Expected PASS |
+| Grid 7×5 renders correctly | Expected PASS |
+| Grid mode mouse drag left/right pans horizontally | Expected PASS |
+| Grid mode mouse drag up/down pans vertically | Expected PASS |
+| Touch vertical swipe pans grid vertically | Expected PASS |
+| Cell squares do not fluctuate with zoom changes | Expected PASS (canonical getCellSize()) |
+| 10×10 = one exact square yellow hundred-flat | Expected PASS |
+| 12×10 = hundred-flat + two vertical ten-sticks | Expected PASS |
+| 11×12 = hundred-flat, one vert ten-stick, two horiz ten-sticks, two units | Expected PASS |
+| 19×14 aligned with no gaps | Expected PASS |
+| 40×17 aligned with no gaps | Expected PASS |
+| y-bead drag down near bottom continues adding rows (doesn't block) | Expected PASS |
+| View smoothly scales down during y-pull past viewport | Expected PASS |
+| Upper-left origin stays stable during y-pull scaling | Expected PASS |
+| No Solid mode added | PASS |
+| No visible instructional prose added | PASS |
+
+---
 
 **Architecture: unified `#gridCanvas` replaces `nlTray + arraySurface` in Grid mode**
 
