@@ -1,8 +1,127 @@
 # Latest Review
 
-## Grid Mode Refactor — 2026-05-11
+## Grid Mode Geometry + Hundred-Flat Fusion — 2026-05-14
 
-Status: PASS
+Status: PENDING — awaiting human acceptance-test run
+
+### Must Fix
+- None identified by automated analysis.
+
+### Should Fix Soon
+- No reset affordance. Users must drag both beads back to zero manually.
+- Keyboard stepping of the x-bead (ArrowLeft / ArrowRight) not yet implemented.
+- No zoom-to-fit for large grids on mobile.
+
+### Summary of Changes
+
+**Architecture: unified `#gridCanvas` replaces `nlTray + arraySurface` in Grid mode**
+
+Previous Grid mode reused `#nlTray` as row 1 (with 8 px vertical padding + 1 px border)
+and `#arraySurface` as rows 2..N (no padding, 1 px seam borders).  
+Row 1 was taller than rows 2..N by 17 px, making cells non-square and breaking
+hundred-flat geometry.
+
+The new approach:
+
+- `#nlTray` is a **zero-height metric anchor** in Grid mode (`height: 0; overflow: visible;
+  padding-top/bottom: 0; border: none; background: transparent`). Its `slot-1` DOM node
+  remains for `getSlotMetrics()` (offsetWidth / offsetLeft). Its slots are transparent in
+  Grid mode via CSS.
+- `#gridCanvas` (`<div class="grid-canvas" id="gridCanvas">`) is added after `#nlTray`
+  in x-content-area and is shown only in Grid mode. It contains ALL rows (1..rows) as
+  `.grid-row` divs. Each `.grid-row` has `height: var(--slot-w)` (no border) so every row
+  is exactly one cell-height. Ten rows = 10 × `--slot-w` = exactly the same as ten columns
+  → **square cells and square hundred-flats**.
+- `#arraySurface` is hidden via `display: none !important` in Grid mode (superseded by
+  `#gridCanvas`). `renderArraySurface()` is no longer called from `renderBlocks()`.
+
+**X-bead centerline**
+
+`body.grid-mode .pull-bead` sets `bottom: auto; top: calc(var(--slot-w) / 2);
+transform: translate(-50%, -50%)`. Since `#nlTray` has `height: 0` and `overflow: visible`,
+the bead's center is at `nlTray.offsetTop + slotW/2 = nlTop.offsetHeight + slotW/2`, which
+equals row 1's center in `#gridCanvas`. ✓
+
+**Y-axis track alignment**
+
+`body.grid-mode .y-axis-track` sets `padding-top: 0; padding-bottom: 0; border: none;
+box-shadow: 0 0 0 1px rgba(0,0,0,0.1), inset 0 4px 15px rgba(0,0,0,0.1)`. Removing the
+1 px border prevents a 2 px height mismatch; removing vertical padding ensures each y-slot
+is exactly `--slot-w` tall. `alignYAxis()` sets `margin-top = nlTop.offsetHeight` so the
+track's top coincides with `#gridCanvas`'s top (which also starts at `nlTop.offsetHeight`
+because nlTray has height 0). ✓
+
+**Y-bead centerline**
+
+`positionYBead()` uses `yAxisTrack.offsetTop + yAxisTrack.offsetHeight`. With no vertical
+padding or border on the track, `offsetHeight = rows × slotW` exactly, placing the bead
+center at the bottom edge of the last grid row. ✓
+
+**Bottom rail**
+
+`.grid-canvas::after` provides the heavy white 6 px bottom rail at the bottom of the full
+array (`position: absolute; bottom: 0`). The old rail was on `#nlTray::after` which was
+hidden in Grid mode. ✓
+
+**Hundred-flat fusion (`renderGridCanvas`)**
+
+New function `renderGridCanvas()` replaces `renderArraySurface()` for Grid mode.
+
+- PV off: red unit cubes in every slot of every row (identical per row).
+- PV on:
+  - **Hundred-flats** (`hvFlatsX = ⌊quantity/10⌋, hvFlatsY = ⌊rows/10⌋`): one `.hundred-flat`
+    div per (tx, ty) pair, `position: absolute` in `#gridCanvas` at
+    `left = trayPad + tx×10×slotW`, `top = ty×10×slotW`. Width and height both
+    `10×slotW` → **square** at every zoom level.
+  - **Ten-sticks** in non-hundred-flat rows (rows `hvFlatsY×10+1..rows`): one `.ten-bar`
+    per complete decade, `position: absolute` within the `.grid-row` at
+    `left = tx×10×slotW` (no extra trayPad offset — the row is already shifted by
+    `#gridCanvas`'s horizontal padding).
+  - **Unit cubes** in partial-column slots of non-hundred-flat rows.
+  - **Unit cubes** in the partial-column slots of hundred-flat rows (columns to the right
+    of all complete ten-groups).
+
+**Hundred-flat style**
+
+`.hundred-flat` is `10×slotW` square, `background: repeating-linear-gradient` overlays
+1 px grid-lines on a warm golden yellow `#C8960C`, `transform: rotateX(10deg)` for depth.
+`::before` pseudo shows `'100'` stamp (same pattern as cube `'1'` and ten-bar `'10'`).
+
+**`renderBlocks()` routing**
+
+```
+if (mode === 'line')  → render in nlTray (unchanged)
+else                  → renderGridCanvas()
+```
+
+`renderArraySurface()` is defined but no longer called; `arraySurface` is always hidden in
+Grid mode via CSS.
+
+**What was preserved from Line mode**
+
+- Drag x-bead right/left creates/removes unit cubes; bead snaps per slot.
+- `unitSnap` and `tenMerge` animations (Line mode only).
+- Place Value toggle, live record, `ensureBeadVisible()`, pinch/Ctrl+wheel/keyboard zoom,
+  horizontal pan — all unchanged.
+
+**Acceptance tests (self-review)**
+
+| Test | Status |
+|---|---|
+| Line mode still works — x-bead, blocks, PV, zoom, animations all untouched | Expected PASS |
+| Grid 7×5 shows one unified 7-by-5 square-cell array | Expected PASS |
+| Bottom rail under row 5, not row 1 | Expected PASS (grid-canvas::after) |
+| X/Y axes share one origin; x/y ticks align to square-cell grid | Expected PASS |
+| Beads on axis centerlines | Expected PASS |
+| PV on, 10×10 → one square yellow hundred-flat | Expected PASS |
+| PV on, 40×17 → four square flats + aligned 40×7 structure | Expected PASS |
+| Record shows correct products | Expected PASS |
+| No Solid mode added | PASS |
+| No visible instruction text added | PASS |
+
+---
+
+
 
 ### Must Fix
 - None

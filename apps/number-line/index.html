@@ -612,15 +612,119 @@
         body.grid-mode .y-axis-area,
         body.grid-mode .y-axis-track,
         body.grid-mode .array-surface,
-        body.grid-mode .array-row {
+        body.grid-mode .array-row,
+        body.grid-mode .grid-canvas,
+        body.grid-mode .grid-row {
             touch-action: pan-x pan-y;
         }
-        /* Connect nlTray to array-surface: flat bottom in grid mode */
+        /* ── GRID CANVAS (unified surface — replaces nlTray+arraySurface in grid mode) ── */
+        .grid-canvas {
+            display: none;               /* shown by JS in grid mode */
+            flex-direction: column;
+            background: #E5E5EA;
+            border-radius: 16px;
+            /* spread-only shadow looks like a 1-px border without affecting geometry */
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1), inset 0 4px 15px rgba(0,0,0,0.1);
+            position: relative;
+            flex-shrink: 0;
+            overflow: hidden;
+            padding: 0 var(--tray-pad);  /* horizontal breathing room; NO vertical padding → rows are exactly --slot-w */
+        }
+        body.grid-mode .grid-canvas { display: flex; }
+
+        /* Grid row — flat strip with no seam border; slot bg alternation provides column structure */
+        .grid-row {
+            display: flex;
+            flex-shrink: 0;
+            position: relative;
+            height: var(--slot-w);      /* exactly one slot height; 10 rows = 10×--slot-w = square */
+        }
+        .grid-row .slot:first-child { border-radius: 0; }
+        .grid-row .slot.last-visible { border-radius: 0 !important; }
+
+        /* Heavy bottom rail rides at the bottom of the full array */
+        .grid-canvas::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 6px;
+            background: var(--surface);
+            z-index: 999;
+            pointer-events: none;
+            border-radius: 0 0 14px 14px;
+        }
+
+        /* Hundred-flat — enameled cast-iron yellow hundreds block */
+        .hundred-flat {
+            position: absolute;
+            width:  calc(var(--slot-w) * 10);
+            height: calc(var(--slot-w) * 10);     /* exactly square */
+            border-radius: calc(6px * var(--zoom));
+            background:
+                repeating-linear-gradient(to right,  rgba(0,0,0,0.07) 0 1px, transparent 1px var(--slot-w)),
+                repeating-linear-gradient(to bottom, rgba(0,0,0,0.07) 0 1px, transparent 1px var(--slot-w)),
+                #C8960C;                           /* warm golden yellow — cast-iron hundreds */
+            box-shadow:
+                inset 2px 2px 0 rgba(255,255,255,0.35),
+                inset -2px -2px 0 rgba(0,0,0,0.15),
+                0 8px 20px rgba(0,0,0,0.14),
+                1px -1px 0 rgba(0,0,0,0.08);
+            transform: rotateX(10deg);
+            z-index: 25;
+            pointer-events: none;
+        }
+        .hundred-flat::before {
+            content: '100';
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; color: rgba(255,255,255,0.45);
+            font-size: calc(40px * var(--zoom));
+            pointer-events: none; z-index: 5;
+        }
+
+        /* ── GRID MODE OVERRIDES FOR EXISTING ELEMENTS ── */
+
+        /* nlTray → zero-height bead-and-metric anchor; slots stay in DOM for getSlotMetrics() */
         body.grid-mode #nlTray {
-            border-radius: 16px 16px 0 0;
-            border-bottom-width: 0;
+            height: 0;
+            min-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            overflow: visible;   /* lets the bead (absolute) render above grid-canvas */
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            border-radius: 0;
         }
         body.grid-mode #nlTray::after { display: none; }
+        /* Slots are invisible in grid mode; offsetWidth / offsetLeft still valid for metrics */
+        body.grid-mode #nlTray .slot {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        /* X-bead rides on the centerline of the top x-axis rail */
+        body.grid-mode .pull-bead {
+            bottom: auto;
+            top: calc(var(--slot-w) / 2);
+            transform: translate(-50%, -50%);
+        }
+        body.grid-mode .pull-bead:hover  { transform: translate(-50%, -50%) scale(1.2); }
+        body.grid-mode .pull-bead.dragging { transform: translate(-50%, -50%) scale(1.25); }
+
+        /* Y-axis track: remove vertical padding/border so y-slots align exactly to grid rows */
+        body.grid-mode .y-axis-track {
+            padding-top: 0;
+            padding-bottom: 0;
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1), inset 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        /* arraySurface is fully superseded by grid-canvas in grid mode */
+        body.grid-mode #arraySurface { display: none !important; }
+
         /* Hide per-decade bottom labels in grid mode */
         body.grid-mode #nlBot { display: none; }
         /* Smaller record text to fit "x × y = total" */
@@ -708,6 +812,7 @@
                 <div class="x-content-area">
                     <div class="number-line-top" id="nlTop"></div>
                     <div class="tray" id="nlTray"></div>
+                    <div class="grid-canvas" id="gridCanvas"></div>
                     <div class="array-surface" id="arraySurface"></div>
                     <div class="number-line-bottom" id="nlBot"></div>
                 </div>
@@ -738,6 +843,7 @@
         const yAxisArea  = document.getElementById('yAxisArea');
         const yAxisTrack = document.getElementById('yAxisTrack');
         const arraySurface = document.getElementById('arraySurface');
+        const gridCanvas   = document.getElementById('gridCanvas');
 
         // Bead element — created in bootstrap after initBoard()
         let bead = null;
@@ -842,72 +948,77 @@
         // ── RENDER BLOCKS ──
         // Removes old cubes/ten-bars, redraws according to quantity + PV mode,
         // then repositions the bead.
-        // animFlags: { newUnit: bool, newTen: bool }
+        // animFlags: { newUnit: bool, newTen: bool } — used in Line mode only.
         function renderBlocks(animFlags) {
             nlTray.querySelectorAll('.cube, .ten-bar').forEach(el => el.remove());
 
-            const { w: slotW, pad: trayPad } = getSlotMetrics();
+            if (mode === 'line') {
+                // ── Line mode: render blocks in nlTray ──
+                gridCanvas.style.display = 'none'; // clear any inline style from grid mode
+                const { w: slotW, pad: trayPad } = getSlotMetrics();
 
-            if (placeValueMode) {
-                const tens = Math.floor(quantity / 10);
-                const ones = quantity % 10;
-                let cur = 1;
+                if (placeValueMode) {
+                    const tens = Math.floor(quantity / 10);
+                    const ones = quantity % 10;
+                    let cur = 1;
 
-                for (let t = 0; t < tens; t++) {
-                    const bar = document.createElement('div');
-                    bar.className = 'ten-bar';
-                    // Position using measured metrics so zoom changes are instant
-                    bar.style.left = (trayPad + (cur - 1) * slotW) + 'px';
-                    for (let j = 0; j < 10; j++) {
-                        const seg = document.createElement('div');
-                        seg.className = 'ten-segment';
-                        bar.appendChild(seg);
+                    for (let t = 0; t < tens; t++) {
+                        const bar = document.createElement('div');
+                        bar.className = 'ten-bar';
+                        // Position using measured metrics so zoom changes are instant
+                        bar.style.left = (trayPad + (cur - 1) * slotW) + 'px';
+                        for (let j = 0; j < 10; j++) {
+                            const seg = document.createElement('div');
+                            seg.className = 'ten-segment';
+                            bar.appendChild(seg);
+                        }
+                        nlTray.appendChild(bar);
+                        cur += 10;
                     }
-                    nlTray.appendChild(bar);
-                    cur += 10;
+                    for (let o = 0; o < ones; o++) {
+                        const cube = document.createElement('div');
+                        cube.className = 'cube';
+                        const slot = document.getElementById(`slot-${cur}`);
+                        if (slot) slot.appendChild(cube);
+                        cur++;
+                    }
+                } else {
+                    // PV off: all raw red unit cubes
+                    for (let o = 0; o < quantity; o++) {
+                        const cube = document.createElement('div');
+                        cube.className = 'cube';
+                        const slot = document.getElementById(`slot-${o + 1}`);
+                        if (slot) slot.appendChild(cube);
+                    }
                 }
-                for (let o = 0; o < ones; o++) {
-                    const cube = document.createElement('div');
-                    cube.className = 'cube';
-                    const slot = document.getElementById(`slot-${cur}`);
-                    if (slot) slot.appendChild(cube);
-                    cur++;
+
+                // ── Tactile feedback animations (Line mode only) ──
+                if (animFlags && animFlags.newTen) {
+                    // Heavier thud: animate the last (newest) ten-bar
+                    const bars = nlTray.querySelectorAll('.ten-bar');
+                    if (bars.length > 0) {
+                        const lastBar = bars[bars.length - 1];
+                        void lastBar.offsetWidth; // force reflow so animation restarts
+                        lastBar.classList.add('ten-merge');
+                        vibrate([18]);
+                    }
+                } else if (animFlags && animFlags.newUnit) {
+                    // Light snap: animate only the most recently added cube
+                    const cubes = nlTray.querySelectorAll('.cube');
+                    if (cubes.length > 0) {
+                        const lastCube = cubes[cubes.length - 1];
+                        void lastCube.offsetWidth;
+                        lastCube.classList.add('unit-snap');
+                        vibrate([8]);
+                    }
                 }
             } else {
-                // PV off: all raw red unit cubes
-                for (let o = 0; o < quantity; o++) {
-                    const cube = document.createElement('div');
-                    cube.className = 'cube';
-                    const slot = document.getElementById(`slot-${o + 1}`);
-                    if (slot) slot.appendChild(cube);
-                }
+                // ── Grid mode: render all rows in gridCanvas ──
+                renderGridCanvas();
             }
 
-            // ── Tactile feedback animations ──
-            if (animFlags && animFlags.newTen) {
-                // Heavier thud: animate the last (newest) ten-bar
-                const bars = nlTray.querySelectorAll('.ten-bar');
-                if (bars.length > 0) {
-                    const lastBar = bars[bars.length - 1];
-                    void lastBar.offsetWidth; // force reflow so animation restarts
-                    lastBar.classList.add('ten-merge');
-                    vibrate([18]);
-                }
-            } else if (animFlags && animFlags.newUnit) {
-                // Light snap: animate only the most recently added cube
-                const cubes = nlTray.querySelectorAll('.cube');
-                if (cubes.length > 0) {
-                    const lastCube = cubes[cubes.length - 1];
-                    void lastCube.offsetWidth;
-                    lastCube.classList.add('unit-snap');
-                    vibrate([8]);
-                }
-            }
-
-            // ── Grid mode: build y-axis track + unified array surface ──
-            // Always call these so switching back to line mode clears stale DOM.
+            // ── Grid mode: build y-axis track + align ──
             renderYAxisTrack();
-            renderArraySurface();
             if (mode === 'grid') alignYAxis();
 
             positionBead();
@@ -1004,7 +1115,114 @@
         // Offset the y-axis-track by the height of nlTop so row-1 aligns with the x-axis tray.
         function alignYAxis() {
             if (mode !== 'grid') return;
+            // In grid mode, nlTray has height 0; gridCanvas starts immediately after nlTop.
             yAxisTrack.style.marginTop = nlTop.offsetHeight + 'px';
+        }
+
+        // ── RENDER GRID CANVAS ──
+        // Builds ALL rows (1..rows) and ALL blocks in the unified gridCanvas.
+        // In grid mode this fully replaces the nlTray+arraySurface pair.
+        function renderGridCanvas() {
+            gridCanvas.innerHTML = '';
+            if (mode !== 'grid' || quantity === 0) {
+                gridCanvas.style.display = 'none';
+                return;
+            }
+            gridCanvas.style.display = 'flex';
+
+            const { w: slotW, pad: trayPad } = getSlotMetrics();
+            const visMax    = getVisibleMax();
+            // PV groupings
+            const hvFlatsX  = placeValueMode ? Math.floor(quantity / 10) : 0;
+            const hvFlatsY  = placeValueMode ? Math.floor(rows     / 10) : 0;
+            const onesX     = placeValueMode ? (quantity % 10)            : quantity;
+
+            // ── 1. Slot-background rows (all rows) ──
+            for (let r = 1; r <= rows; r++) {
+                const rowEl = document.createElement('div');
+                rowEl.className = 'grid-row';
+                for (let c = 1; c <= visMax; c++) {
+                    const decadeIdx = Math.floor((c - 1) / 10);
+                    const theme = decadeIdx % 2 === 0 ? 'bg-light' : 'bg-dark';
+                    const slot  = document.createElement('div');
+                    slot.className = `slot ${theme}`;
+                    if (c === visMax) slot.classList.add('last-visible');
+                    rowEl.appendChild(slot);
+                }
+                gridCanvas.appendChild(rowEl);
+            }
+
+            // ── 2. Blocks ──
+            const gridRows = gridCanvas.querySelectorAll('.grid-row');
+
+            if (!placeValueMode) {
+                // PV off: red unit cubes in each slot (every row identical)
+                for (let r = 1; r <= rows; r++) {
+                    const rowSlots = gridRows[r - 1].querySelectorAll('.slot');
+                    for (let c = 0; c < quantity; c++) {
+                        const cube = document.createElement('div');
+                        cube.className = 'cube';
+                        if (rowSlots[c]) rowSlots[c].appendChild(cube);
+                    }
+                }
+            } else {
+                // PV on ──────────────────────────────────────────────────────
+
+                // 2a. Hundred-flats (absolutely positioned in gridCanvas)
+                //     One flat covers tx*10..tx*10+9 cols × ty*10..ty*10+9 rows.
+                //     gridCanvas has padding: 0 trayPad, so the content area starts
+                //     at trayPad from gridCanvas's left edge; absolute children are
+                //     relative to gridCanvas's PADDING EDGE.
+                for (let ty = 0; ty < hvFlatsY; ty++) {
+                    for (let tx = 0; tx < hvFlatsX; tx++) {
+                        const flat = document.createElement('div');
+                        flat.className = 'hundred-flat';
+                        flat.style.left = (trayPad + tx * 10 * slotW) + 'px';
+                        flat.style.top  = (ty * 10 * slotW) + 'px';
+                        gridCanvas.appendChild(flat);
+                    }
+                }
+
+                // 2b. Rows in the non-hundred-flat zone (rows hvFlatsY*10+1 .. rows)
+                //     Ten-sticks for each complete decade; cubes for the partial group.
+                //     Blocks are absolute within their grid-row (no trayPad offset needed
+                //     because the row itself is already shifted by gridCanvas's padding).
+                for (let r = hvFlatsY * 10 + 1; r <= rows; r++) {
+                    const rowEl    = gridRows[r - 1];
+                    const rowSlots = rowEl.querySelectorAll('.slot');
+                    for (let tx = 0; tx < hvFlatsX; tx++) {
+                        const bar = document.createElement('div');
+                        bar.className  = 'ten-bar';
+                        bar.style.left = (tx * 10 * slotW) + 'px';
+                        for (let j = 0; j < 10; j++) {
+                            const seg = document.createElement('div');
+                            seg.className = 'ten-segment';
+                            bar.appendChild(seg);
+                        }
+                        rowEl.appendChild(bar);
+                    }
+                    for (let o = 0; o < onesX; o++) {
+                        const cube = document.createElement('div');
+                        cube.className = 'cube';
+                        const colIdx = hvFlatsX * 10 + o;
+                        if (rowSlots[colIdx]) rowSlots[colIdx].appendChild(cube);
+                    }
+                }
+
+                // 2c. Partial-column cubes inside the hundred-flat zone
+                //     (only the columns to the right of all complete ten-groups)
+                if (hvFlatsY > 0 && onesX > 0) {
+                    for (let r = 1; r <= hvFlatsY * 10; r++) {
+                        const rowSlots = gridRows[r - 1].querySelectorAll('.slot');
+                        for (let o = 0; o < onesX; o++) {
+                            const cube = document.createElement('div');
+                            cube.className = 'cube';
+                            const colIdx = hvFlatsX * 10 + o;
+                            if (rowSlots[colIdx]) rowSlots[colIdx].appendChild(cube);
+                        }
+                    }
+                }
+            }
         }
 
         // ── POSITION Y-BEAD ──
