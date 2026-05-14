@@ -285,6 +285,33 @@
         .ten-segment { flex: 1; border-right: 1px solid rgba(0,0,0,0.15); }
         .ten-segment:last-child { border-right: none; }
 
+        /* Vertical ten-stick — same material as .ten-bar, spans 10 rows, 1 column wide.
+           Height mirrors the horizontal ten-bar's width formula (10×slot - depth) so the
+           leading-edge gap is at the bottom, matching the horizontal bar's right-side gap. */
+        .ten-bar-vert {
+            width: var(--cube-base);
+            height: calc(var(--slot-w) * 10 - var(--depth)); /* depth gap at bottom, mirrors horiz bar */
+            border-radius: calc(6px * var(--zoom));
+            background: var(--tens);
+            position: absolute;
+            transform: rotateX(10deg);
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-block);
+            z-index: 15;
+            pointer-events: none;
+        }
+        .ten-bar-vert::before {
+            content: '10';
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; color: rgba(255,255,255,0.6);
+            font-size: calc(22px * var(--zoom));
+            pointer-events: none; z-index: 5;
+        }
+        .ten-seg-vert { flex: 1; border-bottom: 1px solid rgba(0,0,0,0.15); }
+        .ten-seg-vert:last-child { border-bottom: none; }
+
         /* ── NUMBER STAMPS ── */
         .cube::after {
             content: '1';
@@ -1209,16 +1236,24 @@
                     }
                 }
 
-                // 2c. Partial-column cubes inside the hundred-flat zone
-                //     (only the columns to the right of all complete ten-groups)
+                // 2c. Vertical ten-sticks for partial columns inside the hundred-flat zone.
+                //     Each partial column has hvFlatsY complete groups of 10 rows, so each
+                //     group fuses into a vertical ten-stick (10 cells tall, 1 column wide).
+                //     Positioned absolutely in gridCanvas (like hundred-flats), not inside a grid-row.
                 if (hvFlatsY > 0 && onesX > 0) {
-                    for (let r = 1; r <= hvFlatsY * 10; r++) {
-                        const rowSlots = gridRows[r - 1].querySelectorAll('.slot');
-                        for (let o = 0; o < onesX; o++) {
-                            const cube = document.createElement('div');
-                            cube.className = 'cube';
-                            const colIdx = hvFlatsX * 10 + o;
-                            if (rowSlots[colIdx]) rowSlots[colIdx].appendChild(cube);
+                    for (let o = 0; o < onesX; o++) {
+                        const colIdx = hvFlatsX * 10 + o;
+                        for (let ty = 0; ty < hvFlatsY; ty++) {
+                            const stick = document.createElement('div');
+                            stick.className = 'ten-bar-vert';
+                            stick.style.left = (trayPad + colIdx * slotW) + 'px';
+                            stick.style.top  = (ty * 10 * slotW) + 'px'; // 10 rows per stick
+                            for (let j = 0; j < 10; j++) { // 10 segments — one per row cell
+                                const seg = document.createElement('div');
+                                seg.className = 'ten-seg-vert';
+                                stick.appendChild(seg);
+                            }
+                            gridCanvas.appendChild(stick);
                         }
                     }
                 }

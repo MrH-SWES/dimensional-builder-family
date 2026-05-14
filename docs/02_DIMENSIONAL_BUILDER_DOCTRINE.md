@@ -14,7 +14,7 @@ The Dimensional Builder family models quantity across one, two, and (eventually)
 - **Record:** live numeral (or expression) reflects current physical state. Font shrinks to fit longer expressions.
 - **No reset button** (current milestone): users drag the bead back to 0.
 - **MAX_ROWS = 20**, **MAX_X = 150** (as implemented).
-- Hundred-flat fusion across rows is **not yet implemented** — deferred milestone.
+- **Place Value / Grid fusion rules:** hundred-flats (10×10) take priority; after all complete 10×10 flats fuse, leftover complete runs of 10 fuse into blue ten-sticks in the direction that preserves the rectangular array structure. Partial columns inside the hundred-flat row-band become vertical ten-sticks; partial rows below the hundred-flat column-band get horizontal ten-sticks.
 
 ### Array Builder (2D)
 
@@ -55,6 +55,6 @@ The Dimensional Builder family models quantity across one, two, and (eventually)
 
 1. Reset affordance (button or double-tap bead).
 2. Keyboard stepping of x-bead (ArrowLeft / ArrowRight).
-3. Hundred-flat fusion across Grid rows.
+3. ~~Hundred-flat fusion across Grid rows.~~ (Implemented: vertical ten-sticks fill leftover partial columns inside the hundred-flat zone.)
 4. Zoom-to-fit affordance for large grids on mobile.
 5. Full enameled cast-iron / brushed-metal material redesign.
