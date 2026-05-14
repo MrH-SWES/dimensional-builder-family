@@ -712,25 +712,18 @@
 
         /* ── GRID MODE OVERRIDES FOR EXISTING ELEMENTS ── */
 
-        /* nlTray → zero-height bead-and-metric anchor; slots stay in DOM for getSlotMetrics() */
+        /* X-axis rail in grid mode: visible 1-cell-tall track, bead rides the centerline.
+           Mirrors the y-axis-track style so both axes look like the same component rotated 90°. */
         body.grid-mode #nlTray {
-            height: 0;
-            min-height: 0;
             padding-top: 0;
             padding-bottom: 0;
-            overflow: visible;   /* lets the bead (absolute) render above grid-canvas */
+            min-height: var(--cell-size);   /* exact 1-cell height; overrides padded min-height */
             border: none;
-            background: transparent;
-            box-shadow: none;
-            border-radius: 0;
+            border-radius: 16px;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1), inset 0 4px 15px rgba(0,0,0,0.1);
+            overflow: visible;              /* lets the bead z-index clear the rail edge */
         }
         body.grid-mode #nlTray::after { display: none; }
-        /* Slots are invisible in grid mode; offsetWidth / offsetLeft still valid for metrics */
-        body.grid-mode #nlTray .slot {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-        }
 
         /* X-bead rides on the centerline of the top x-axis rail */
         body.grid-mode .pull-bead {
@@ -1089,26 +1082,36 @@
             positionYBead();
         }
 
-        // ── VISIBLE MAX (shared helper) ──
-        function getVisibleMax() {
-            let v = Math.ceil(quantity / 10) * 10 + 10;
+        // ── VISIBLE AXIS MAX (shared helper) ──
+        // Returns the next full decade beyond activeValue, always at least 20.
+        // Used for both the x-axis (based on quantity) and the y-axis (based on rows).
+        function getVisibleAxisMax(activeValue) {
+            let v = Math.ceil(activeValue / 10) * 10 + 10;
             if (v < 20) v = 20;
+            return v;
+        }
+
+        // ── VISIBLE MAX (x-axis) ──
+        function getVisibleMax() {
+            let v = getVisibleAxisMax(quantity);
             if (v > MAX_CAPACITY) v = MAX_CAPACITY;
             return v;
         }
 
         // ── RENDER Y-AXIS TRACK ──
-        // Builds the vertical number-line slots 1..rows on the left side.
+        // Builds vertical slots 1..visYMax — active rows plus one blank decade ahead —
+        // mirroring the x-axis visible-track logic so both axes share the same language.
         function renderYAxisTrack() {
             yAxisTrack.innerHTML = '';
             if (mode !== 'grid' || quantity === 0) return;
-            for (let r = 1; r <= rows; r++) {
+            const visYMax = Math.min(getVisibleAxisMax(rows), MAX_ROWS);
+            for (let r = 1; r <= visYMax; r++) {
                 const decadeIdx = Math.floor((r - 1) / 10);
                 const theme = decadeIdx % 2 === 0 ? 'bg-light' : 'bg-dark';
                 const isAnchor = r % 10 === 0;
                 const slot = document.createElement('div');
                 slot.className = `y-slot ${theme}`;
-                if (r === rows) slot.classList.add('last-y-slot');
+                if (r === visYMax) slot.classList.add('last-y-slot');
                 const lbl = document.createElement('span');
                 lbl.className = `y-slot-label${isAnchor ? ' anchor' : ''}`;
                 lbl.textContent = r;
@@ -1174,11 +1177,11 @@
         }
 
         // ── ALIGN Y-AXIS ──
-        // Offset the y-axis-track by the height of nlTop so row-1 aligns with the x-axis tray.
+        // Offset the y-axis-track so row-1 aligns with the top of gridCanvas.
+        // gridCanvas starts after nlTop (axis labels) and nlTray (x-axis rail, height = getCellSize()).
         function alignYAxis() {
             if (mode !== 'grid') return;
-            // In grid mode, nlTray has height 0; gridCanvas starts immediately after nlTop.
-            yAxisTrack.style.marginTop = nlTop.offsetHeight + 'px';
+            yAxisTrack.style.marginTop = (nlTop.offsetHeight + getCellSize()) + 'px';
         }
 
         // ── RENDER GRID CANVAS ──
@@ -1296,7 +1299,8 @@
         }
 
         // ── POSITION Y-BEAD ──
-        // Places the y-bead centered on the y-axis track, at its bottom edge.
+        // Places the y-bead on the centerline of the y-axis rail at the active-row boundary.
+        // Mirrors x-bead logic: bead center sits at the right/bottom edge of the last active slot.
         function positionYBead() {
             if (!yBead) return;
             if (mode !== 'grid' || quantity === 0) {
@@ -1304,11 +1308,10 @@
                 return;
             }
             yBead.style.display = 'flex';
-            // Center horizontally on the y-axis area
+            // Horizontal centerline of the y-axis rail
             yBead.style.left = (yAxisArea.offsetWidth / 2) + 'px';
-            // Bottom edge of the y-axis track
-            const trackBottom = yAxisTrack.offsetTop + yAxisTrack.offsetHeight;
-            yBead.style.top = trackBottom + 'px';
+            // Active-row boundary: bottom edge of the rows-th slot within the extended track
+            yBead.style.top = (yAxisTrack.offsetTop + rows * getCellSize()) + 'px';
         }
 
         // ── SET MODE ──
