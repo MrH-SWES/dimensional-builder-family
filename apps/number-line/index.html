@@ -752,6 +752,37 @@
         /* arraySurface is fully superseded by grid-canvas in grid mode */
         body.grid-mode #arraySurface { display: none !important; }
 
+        /* ── Grid mode: one canonical cell lattice ──
+           Every block must occupy exactly the same --slot-w square cells.
+           Remove the 3-D rotateX tilt so nothing shifts off the grid. */
+
+        /* Red unit cubes: exactly 1×1 cells */
+        body.grid-mode .cube {
+            width: var(--slot-w);
+            height: var(--slot-w);
+            top: 0;
+            left: 0;
+            transform: none;
+            border-radius: calc(3px * var(--zoom));
+        }
+        /* Horizontal ten-sticks: exactly 10×1 cells */
+        body.grid-mode .ten-bar {
+            width: calc(var(--slot-w) * 10);
+            height: var(--slot-w);
+            top: 0;
+            transform: none;
+        }
+        /* Vertical ten-sticks: exactly 1×10 cells */
+        body.grid-mode .ten-bar-vert {
+            width: var(--slot-w);
+            height: calc(var(--slot-w) * 10);
+            transform: none;
+        }
+        /* Hundred-flats: already 10×10 cells in width/height; only remove the tilt */
+        body.grid-mode .hundred-flat {
+            transform: none;
+        }
+
         /* Hide per-decade bottom labels in grid mode */
         body.grid-mode #nlBot { display: none; }
         /* Smaller record text to fit "x × y = total" */
